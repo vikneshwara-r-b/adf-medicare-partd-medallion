@@ -205,3 +205,11 @@ resource "azurerm_role_assignment" "adf_storage_blob_data_contributor" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_data_factory.main.identity[0].principal_id
 }
+
+# Store storage account connection string in Key Vault
+resource "azurerm_key_vault_secret" "storage_connection_access_key" {
+  name         = "storage-connection-access-key"
+  value        = azurerm_storage_account.adls_gen2.primary_access_key
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on = [azurerm_key_vault_access_policy.adf_policy]
+}
