@@ -3,3 +3,4 @@ infra/*.tfstate
 infra/*.tfstate.backup
 infra/output.plan
 infra/output.ansi
+infra/source_data/*
