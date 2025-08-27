@@ -1,0 +1,10 @@
+{
+	"name": "ls_azure_kv_pair",
+	"properties": {
+		"annotations": [],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "https://kv-medicare-dev-6g9wdd.vault.azure.net/"
+		}
+	}
+}
