@@ -56,6 +56,11 @@ resource "azurerm_storage_data_lake_gen2_filesystem" "source" {
   storage_account_id = azurerm_storage_account.adls_gen2.id
 }
 
+resource "azurerm_storage_data_lake_gen2_filesystem" "staging" {
+  name               = "staging"
+  storage_account_id = azurerm_storage_account.adls_gen2.id
+}
+
 resource "azurerm_storage_data_lake_gen2_filesystem" "raw" {
   name               = "raw"
   storage_account_id = azurerm_storage_account.adls_gen2.id
@@ -77,6 +82,15 @@ resource "azurerm_storage_data_lake_gen2_path" "dynamic_source_dirs" {
   
   path               = each.value
   filesystem_name    = azurerm_storage_data_lake_gen2_filesystem.source.name
+  storage_account_id = azurerm_storage_account.adls_gen2.id
+  resource           = "directory"
+}
+
+resource "azurerm_storage_data_lake_gen2_path" "dynamic_staging_dirs" {
+  for_each = toset(var.directory_structure)
+  
+  path               = each.value
+  filesystem_name    = azurerm_storage_data_lake_gen2_filesystem.staging.name
   storage_account_id = azurerm_storage_account.adls_gen2.id
   resource           = "directory"
 }
