@@ -205,28 +205,3 @@ resource "azurerm_role_assignment" "adf_storage_blob_data_contributor" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_data_factory.main.identity[0].principal_id
 }
-
-# ADF Linked Service for ADLS Gen2
-resource "azurerm_data_factory_linked_service_data_lake_storage_gen2" "adls_linked_service" {
-  name            = "ls_adls_gen2"
-  data_factory_id = azurerm_data_factory.main.id
-  url             = azurerm_storage_account.adls_gen2.primary_dfs_endpoint
-  
-  use_managed_identity = true
-}
-
-# ADF Linked Service for Key Vault
-resource "azurerm_data_factory_linked_service_key_vault" "key_vault_linked_service" {
-  name            = "ls_azure_kv_pair"
-  data_factory_id = azurerm_data_factory.main.id
-  key_vault_id    = azurerm_key_vault.main.id
-}
-
-# Store storage account connection string in Key Vault
-# resource "azurerm_key_vault_secret" "storage_connection_string" {
-#   name         = "storage-connection-string"
-#   value        = azurerm_storage_account.adls_gen2.primary_connection_string
-#   key_vault_id = azurerm_key_vault.main.id
-  
-#   depends_on = [azurerm_key_vault_access_policy.adf_policy]
-# }
