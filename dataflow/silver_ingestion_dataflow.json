@@ -1,0 +1,102 @@
+{
+	"name": "silver_ingestion_dataflow",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "providerstream"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "providerstreamsinkstream",
+					"rejectedDataLinkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					}
+				}
+			],
+			"transformations": [
+				{
+					"name": "providerstreamderivedcolumns"
+				},
+				{
+					"name": "selectproviderstreamcolumns"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          prscrbr_npi as string,",
+				"          prscrbr_last_org_name as string,",
+				"          prscrbr_first_name as string,",
+				"          prscrbr_city as string,",
+				"          prscrbr_state_abrvtn as string,",
+				"          prscrbr_type as string,",
+				"          tot_clms as long,",
+				"          tot_drug_cst as decimal(10,0),",
+				"          tot_benes as long,",
+				"          opioid_tot_clms as long,",
+				"          etl_load_date_time as timestamp",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'raw',",
+				"     folderPath: 'prescriber_by_provider') ~> providerstream",
+				"selectproviderstreamcolumns derive(provider_name_full = case(",
+				"isNull(prscrbr_first_name),",
+				"trim(prscrbr_last_org_name),",
+				"trim(prscrbr_first_name + ' '+ prscrbr_last_org_name)",
+				"),",
+				"          provider_type_standardized = iif(or(like(prscrbr_type, '%FAMILY%'), like(prscrbr_type,'%GENERAL%')), 'Primary Care', ",
+				"iif(like(prscrbr_type, '%CARDIO%'), 'Cardiology', ",
+				"iif(or(like(prscrbr_type, '%ONCOL%'), like(prscrbr_type, '%HEMATOL%')),'Oncology', ",
+				"iif(like(prscrbr_type,'%PSYCH%'), 'Psychiatry', ",
+				"iif(like(prscrbr_type,'%NEUR%'),'Neurology', 'Other Specialty')))))) ~> providerstreamderivedcolumns",
+				"providerstream select(mapColumn(",
+				"          provider_id = prscrbr_npi,",
+				"          prscrbr_last_org_name,",
+				"          prscrbr_first_name,",
+				"          prscrbr_city,",
+				"          prscrbr_state_abrvtn,",
+				"          prscrbr_type,",
+				"          tot_clms,",
+				"          tot_drug_cst,",
+				"          tot_benes,",
+				"          opioid_tot_clms,",
+				"          etl_load_date_time",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> selectproviderstreamcolumns",
+				"providerstreamderivedcolumns sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'silver',",
+				"     folderPath: 'prescriber_by_provider',",
+				"     mergeSchema: false,",
+				"     autoCompact: false,",
+				"     optimizedWrite: false,",
+				"     vacuum: 0,",
+				"     deletable: false,",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     upsertable: false,",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> providerstreamsinkstream"
+			]
+		}
+	}
+}

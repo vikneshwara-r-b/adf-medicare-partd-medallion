@@ -10,6 +10,20 @@
 						"type": "LinkedServiceReference"
 					},
 					"name": "providerstream"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "geographydrugstream"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "providerdrugstream"
 				}
 			],
 			"sinks": [
@@ -23,6 +37,20 @@
 						"referenceName": "ls_adls_gen2",
 						"type": "LinkedServiceReference"
 					}
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "geographydrugbronzesink"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "providerdrugbronzesink"
 				}
 			],
 			"transformations": [
@@ -30,10 +58,37 @@
 					"name": "selectprovider"
 				},
 				{
-					"name": "AlterRow1"
+					"name": "upsertconditionforproviderstream"
 				},
 				{
-					"name": "changedatatypes"
+					"name": "changedatatypesforproviderstream"
+				},
+				{
+					"name": "providerstreamderivedmetadatacolumn"
+				},
+				{
+					"name": "selectgeographydrugcolumns"
+				},
+				{
+					"name": "geographydrugstreamdatatypecasting"
+				},
+				{
+					"name": "geographydrugderivedmetadatacolumn"
+				},
+				{
+					"name": "upsertconditionforgeographydrugstream"
+				},
+				{
+					"name": "selectdrugstreamcolumns"
+				},
+				{
+					"name": "providerdrugstreamdatatypecasting"
+				},
+				{
+					"name": "providerdrugstreamderivedcolumn"
+				},
+				{
+					"name": "upsertconditionforproviderdrugstream"
 				}
 			],
 			"scriptLines": [
@@ -136,6 +191,78 @@
 				"     quoteChar: '\\\"',",
 				"     columnNamesAsHeader: true,",
 				"     wildcardPaths:['prescriber_by_provider/*']) ~> providerstream",
+				"source(output(",
+				"          Prscrbr_Geo_Lvl as string,",
+				"          Prscrbr_Geo_Cd as string,",
+				"          Prscrbr_Geo_Desc as string,",
+				"          Brnd_Name as string,",
+				"          Gnrc_Name as string,",
+				"          Tot_Prscrbrs as integer,",
+				"          Tot_Clms as integer,",
+				"          Tot_30day_Fills as double,",
+				"          Tot_Drug_Cst as double,",
+				"          Tot_Benes as integer,",
+				"          GE65_Sprsn_Flag as string,",
+				"          GE65_Tot_Clms as integer,",
+				"          GE65_Tot_30day_Fills as double,",
+				"          GE65_Tot_Drug_Cst as double,",
+				"          GE65_Bene_Sprsn_Flag as string,",
+				"          GE65_Tot_Benes as integer,",
+				"          LIS_Bene_Cst_Shr as double,",
+				"          NonLIS_Bene_Cst_Shr as double,",
+				"          Opioid_Drug_Flag as boolean,",
+				"          Opioid_LA_Drug_Flag as boolean,",
+				"          Antbtc_Drug_Flag as boolean,",
+				"          Antpsyct_Drug_Flag as boolean",
+				"     ),",
+				"     useSchema: false,",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     rowUrlColumn: 'source_file_name',",
+				"     format: 'delimited',",
+				"     fileSystem: 'staging',",
+				"     columnDelimiter: ',',",
+				"     escapeChar: '\\\"',",
+				"     quoteChar: '\\\"',",
+				"     columnNamesAsHeader: true,",
+				"     wildcardPaths:['geography_and_drug']) ~> geographydrugstream",
+				"source(output(",
+				"          Prscrbr_NPI as integer,",
+				"          Prscrbr_Last_Org_Name as string,",
+				"          Prscrbr_First_Name as string,",
+				"          Prscrbr_City as string,",
+				"          Prscrbr_State_Abrvtn as string,",
+				"          Prscrbr_State_FIPS as short,",
+				"          Prscrbr_Type as string,",
+				"          Prscrbr_Type_Src as string,",
+				"          Brnd_Name as string,",
+				"          Gnrc_Name as string,",
+				"          Tot_Clms as short,",
+				"          Tot_30day_Fills as double,",
+				"          Tot_Day_Suply as integer,",
+				"          Tot_Drug_Cst as double,",
+				"          Tot_Benes as short,",
+				"          GE65_Sprsn_Flag as string,",
+				"          GE65_Tot_Clms as short,",
+				"          GE65_Tot_30day_Fills as double,",
+				"          GE65_Tot_Drug_Cst as double,",
+				"          GE65_Tot_Day_Suply as integer,",
+				"          GE65_Bene_Sprsn_Flag as string,",
+				"          GE65_Tot_Benes as short",
+				"     ),",
+				"     useSchema: false,",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     rowUrlColumn: 'source_file_name',",
+				"     format: 'delimited',",
+				"     fileSystem: 'staging',",
+				"     columnDelimiter: ',',",
+				"     escapeChar: '\\\"',",
+				"     quoteChar: '\\\"',",
+				"     columnNamesAsHeader: true,",
+				"     wildcardPaths:['provider_and_drug/*']) ~> providerdrugstream",
 				"providerstream select(mapColumn(",
 				"          prscrbr_npi = Prscrbr_NPI,",
 				"          prscrbr_last_org_name = Prscrbr_Last_Org_Name,",
@@ -146,21 +273,66 @@
 				"          tot_clms = Tot_Clms,",
 				"          tot_drug_cst = Tot_Drug_Cst,",
 				"          tot_benes = Tot_Benes,",
-				"          Opioid_Tot_Clms",
+				"          opioid_tot_clms = Opioid_Tot_Clms",
 				"     ),",
 				"     skipDuplicateMapInputs: true,",
 				"     skipDuplicateMapOutputs: true) ~> selectprovider",
-				"changedatatypes alterRow(upsertIf(1==1)) ~> AlterRow1",
+				"providerstreamderivedmetadatacolumn alterRow(upsertIf(1==1)) ~> upsertconditionforproviderstream",
 				"selectprovider cast(output(",
 				"          prscrbr_npi as string,",
-				"          prscrbr_last_org_name as string,",
-				"          prscrbr_first_name as string,",
-				"          prscrbr_city as string,",
 				"          tot_clms as long,",
-				"          Opioid_Tot_Clms as long",
+				"          tot_drug_cst as decimal(10,0),",
+				"          tot_benes as long,",
+				"          opioid_tot_clms as long",
 				"     ),",
-				"     errors: false) ~> changedatatypes",
-				"AlterRow1 sink(allowSchemaDrift: true,",
+				"     errors: true) ~> changedatatypesforproviderstream",
+				"changedatatypesforproviderstream derive(etl_load_date_time = currentTimestamp()) ~> providerstreamderivedmetadatacolumn",
+				"geographydrugstream select(mapColumn(",
+				"          prscrbr_geo_lvl = Prscrbr_Geo_Lvl,",
+				"          prscrbr_geo_cd = Prscrbr_Geo_Cd,",
+				"          prscrbr_geo_desc = Prscrbr_Geo_Desc,",
+				"          brnd_name = Brnd_Name,",
+				"          gnrc_name = Gnrc_Name,",
+				"          tot_clms = Tot_Clms,",
+				"          tot_drug_cst = Tot_Drug_Cst,",
+				"          tot_benes = Tot_Benes,",
+				"          opioid_drug_flag = Opioid_Drug_Flag,",
+				"          antbtc_drug_flag = Antbtc_Drug_Flag,",
+				"          source_file_name",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> selectgeographydrugcolumns",
+				"selectgeographydrugcolumns cast(output(",
+				"          prscrbr_geo_lvl as string,",
+				"          tot_clms as long,",
+				"          tot_benes as long",
+				"     ),",
+				"     errors: true) ~> geographydrugstreamdatatypecasting",
+				"geographydrugstreamdatatypecasting derive(etl_load_date_time = currentTimestamp()) ~> geographydrugderivedmetadatacolumn",
+				"geographydrugderivedmetadatacolumn alterRow(upsertIf(1==1)) ~> upsertconditionforgeographydrugstream",
+				"providerdrugstream select(mapColumn(",
+				"          prscrbr_npi = Prscrbr_NPI,",
+				"          brnd_name = Brnd_Name,",
+				"          gnrc_name = Gnrc_Name,",
+				"          tot_clms = Tot_Clms,",
+				"          tot_drug_cst = Tot_Drug_Cst,",
+				"          tot_benes = Tot_Benes,",
+				"          ge65_tot_clms = GE65_Tot_Clms,",
+				"          source_file_name",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> selectdrugstreamcolumns",
+				"selectdrugstreamcolumns cast(output(",
+				"          prscrbr_npi as string,",
+				"          tot_clms as long,",
+				"          tot_drug_cst as decimal(10,0),",
+				"          tot_benes as long,",
+				"          ge65_tot_clms as long",
+				"     ),",
+				"     errors: true) ~> providerdrugstreamdatatypecasting",
+				"providerdrugstreamdatatypecasting derive(etl_load_date_time = currentTimestamp()) ~> providerdrugstreamderivedcolumn",
+				"providerdrugstreamderivedcolumn alterRow(updateIf(1==1)) ~> upsertconditionforproviderdrugstream",
+				"upsertconditionforproviderstream sink(allowSchemaDrift: true,",
 				"     validateSchema: false,",
 				"     format: 'delta',",
 				"     fileSystem: 'raw',",
@@ -178,7 +350,45 @@
 				"     preCommands: [],",
 				"     postCommands: [],",
 				"     skipDuplicateMapInputs: true,",
-				"     skipDuplicateMapOutputs: true) ~> providerbronzesink"
+				"     skipDuplicateMapOutputs: true) ~> providerbronzesink",
+				"upsertconditionforgeographydrugstream sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'raw',",
+				"     folderPath: 'geography_and_drug',",
+				"     mergeSchema: true,",
+				"     autoCompact: true,",
+				"     optimizedWrite: true,",
+				"     vacuum: 0,",
+				"     deletable: false,",
+				"     insertable: false,",
+				"     updateable: false,",
+				"     upsertable: true,",
+				"     keys:['brnd_name','gnrc_name','prscrbr_geo_cd'],",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> geographydrugbronzesink",
+				"upsertconditionforproviderdrugstream sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'raw',",
+				"     folderPath: 'provider_and_drug',",
+				"     mergeSchema: false,",
+				"     autoCompact: true,",
+				"     optimizedWrite: true,",
+				"     vacuum: 0,",
+				"     deletable: false,",
+				"     insertable: false,",
+				"     updateable: false,",
+				"     upsertable: true,",
+				"     keys:['prscrbr_npi','brnd_name','gnrc_name'],",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> providerdrugbronzesink"
 			]
 		}
 	}
