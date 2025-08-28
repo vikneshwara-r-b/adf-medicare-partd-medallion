@@ -10,6 +10,13 @@
 						"type": "LinkedServiceReference"
 					},
 					"name": "providerstream"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "geographybydrugstream"
 				}
 			],
 			"sinks": [
@@ -18,11 +25,18 @@
 						"referenceName": "ls_adls_gen2",
 						"type": "LinkedServiceReference"
 					},
-					"name": "providerstreamsinkstream",
+					"name": "silverproviderscleanedsink",
 					"rejectedDataLinkedService": {
 						"referenceName": "ls_adls_gen2",
 						"type": "LinkedServiceReference"
 					}
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "silverdrugsstandardizedsink"
 				}
 			],
 			"transformations": [
@@ -30,7 +44,28 @@
 					"name": "providerstreamderivedcolumns"
 				},
 				{
-					"name": "selectproviderstreamcolumns"
+					"name": "renameproviderstreamcolumns"
+				},
+				{
+					"name": "selectgeographybydrugstreamcols"
+				},
+				{
+					"name": "geographybydrugderivedcols"
+				},
+				{
+					"name": "selectperoviderstreamcolumns"
+				},
+				{
+					"name": "select1"
+				},
+				{
+					"name": "aggregate1"
+				},
+				{
+					"name": "filter1"
+				},
+				{
+					"name": "join1"
 				}
 			],
 			"scriptLines": [
@@ -53,7 +88,28 @@
 				"     format: 'delta',",
 				"     fileSystem: 'raw',",
 				"     folderPath: 'prescriber_by_provider') ~> providerstream",
-				"selectproviderstreamcolumns derive(provider_name_full = case(",
+				"source(output(",
+				"          prscrbr_geo_lvl as string,",
+				"          prscrbr_geo_cd as string,",
+				"          prscrbr_geo_desc as string,",
+				"          brnd_name as string,",
+				"          gnrc_name as string,",
+				"          tot_clms as long,",
+				"          tot_drug_cst as double,",
+				"          tot_benes as long,",
+				"          opioid_drug_flag as boolean,",
+				"          antbtc_drug_flag as boolean,",
+				"          antpsyct_drug_flag as boolean,",
+				"          source_file_name as string,",
+				"          etl_load_date_time as timestamp",
+				"     ),",
+				"     allowSchemaDrift: false,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'raw',",
+				"     folderPath: 'geography_and_drug') ~> geographybydrugstream",
+				"renameproviderstreamcolumns derive(provider_name_full = case(",
 				"isNull(prscrbr_first_name),",
 				"trim(prscrbr_last_org_name),",
 				"trim(prscrbr_first_name + ' '+ prscrbr_last_org_name)",
@@ -62,13 +118,19 @@
 				"iif(like(prscrbr_type, '%CARDIO%'), 'Cardiology', ",
 				"iif(or(like(prscrbr_type, '%ONCOL%'), like(prscrbr_type, '%HEMATOL%')),'Oncology', ",
 				"iif(like(prscrbr_type,'%PSYCH%'), 'Psychiatry', ",
-				"iif(like(prscrbr_type,'%NEUR%'),'Neurology', 'Other Specialty')))))) ~> providerstreamderivedcolumns",
+				"iif(like(prscrbr_type,'%NEUR%'),'Neurology', 'Other Specialty'))))),",
+				"          city_standardized = upper(trim(regexReplace(prscrbr_city, \"[^A-Za-z\\\\s]\", \"\")))",
+				",",
+				"          provider_entity_type = iif(or(isNull(prscrbr_first_name),prscrbr_first_name==''),'Organization','Individual'),",
+				"          is_high_volume_provider = iif(tot_clms > 10000, true(), false()),",
+				"          effective_date = currentTimestamp(),",
+				"          is_current = true()) ~> providerstreamderivedcolumns",
 				"providerstream select(mapColumn(",
 				"          provider_id = prscrbr_npi,",
 				"          prscrbr_last_org_name,",
 				"          prscrbr_first_name,",
 				"          prscrbr_city,",
-				"          prscrbr_state_abrvtn,",
+				"          state_code = prscrbr_state_abrvtn,",
 				"          prscrbr_type,",
 				"          tot_clms,",
 				"          tot_drug_cst,",
@@ -77,12 +139,68 @@
 				"          etl_load_date_time",
 				"     ),",
 				"     skipDuplicateMapInputs: true,",
-				"     skipDuplicateMapOutputs: true) ~> selectproviderstreamcolumns",
-				"providerstreamderivedcolumns sink(allowSchemaDrift: true,",
+				"     skipDuplicateMapOutputs: true) ~> renameproviderstreamcolumns",
+				"geographybydrugstream select(mapColumn(",
+				"          prscrbr_geo_lvl,",
+				"          prscrbr_geo_cd,",
+				"          prscrbr_geo_desc,",
+				"          brnd_name,",
+				"          gnrc_name,",
+				"          tot_clms,",
+				"          tot_drug_cst,",
+				"          tot_benes,",
+				"          is_opioid = opioid_drug_flag,",
+				"          is_antibiotic = antbtc_drug_flag,",
+				"          is_antipsychotic = antpsyct_drug_flag,",
+				"          source_file_name,",
+				"          etl_load_date_time",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> selectgeographybydrugstreamcols",
+				"geographybydrugstream derive(brand_name_standardized = upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))),",
+				"          generic_name_standardized = upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))),",
+				"          drug_category = iif(and(not(isNull(brnd_name)),brnd_name!=''), 'Brand', ",
+				"iif(and(not(isNull(gnrc_name)),gnrc_name!=''), 'Generic', 'Other'))",
+				",",
+				"          drug_id = concat(upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))),\"|\",upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))))) ~> geographybydrugderivedcols",
+				"providerstreamderivedcolumns select(mapColumn(",
+				"          provider_id,",
+				"          provider_name_full,",
+				"          city_standardized,",
+				"          provider_type_standardized,",
+				"          state_code,",
+				"          provider_entity_type,",
+				"          is_high_volume_provider,",
+				"          etl_load_date_time,",
+				"          effective_date,",
+				"          is_current",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> selectperoviderstreamcolumns",
+				"selectgeographybydrugstreamcols select(mapColumn(",
+				"          brnd_name,",
+				"          gnrc_name,",
+				"          tot_clms,",
+				"          tot_drug_cst",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> select1",
+				"filter1 aggregate(groupBy(brnd_name,",
+				"          gnrc_name),",
+				"     avg_cost_per_claim = sum(tot_drug_cst)/sum(tot_clms)) ~> aggregate1",
+				"select1 filter(and(and(not(isNull(tot_clms)), not(isNull(tot_drug_cst))), tot_clms > 0)) ~> filter1",
+				"geographybydrugderivedcols, aggregate1 join(geographybydrugstream@brnd_name == aggregate1@brnd_name",
+				"     && geographybydrugstream@gnrc_name == aggregate1@gnrc_name,",
+				"     joinType:'left',",
+				"     matchType:'exact',",
+				"     ignoreSpaces: false,",
+				"     broadcast: 'auto')~> join1",
+				"selectperoviderstreamcolumns sink(allowSchemaDrift: true,",
 				"     validateSchema: false,",
 				"     format: 'delta',",
 				"     fileSystem: 'silver',",
 				"     folderPath: 'prescriber_by_provider',",
+				"     overwrite: true,",
 				"     mergeSchema: false,",
 				"     autoCompact: false,",
 				"     optimizedWrite: false,",
@@ -95,7 +213,25 @@
 				"     preCommands: [],",
 				"     postCommands: [],",
 				"     skipDuplicateMapInputs: true,",
-				"     skipDuplicateMapOutputs: true) ~> providerstreamsinkstream"
+				"     skipDuplicateMapOutputs: true) ~> silverproviderscleanedsink",
+				"geographybydrugderivedcols sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'silver',",
+				"     folderPath: 'geography_and_drug',",
+				"     mergeSchema: false,",
+				"     autoCompact: false,",
+				"     optimizedWrite: false,",
+				"     vacuum: 0,",
+				"     deletable: false,",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     upsertable: false,",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> silverdrugsstandardizedsink"
 			]
 		}
 	}
