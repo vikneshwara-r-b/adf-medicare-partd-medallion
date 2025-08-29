@@ -270,7 +270,7 @@
 				"          prscrbr_city = Prscrbr_City,",
 				"          prscrbr_state_abrvtn = Prscrbr_State_Abrvtn,",
 				"          prscrbr_type = Prscrbr_Type,",
-				"          Prscrbr_Type_Src,",
+				"          prscrbr_type_src = Prscrbr_Type_Src,",
 				"          tot_clms = Tot_Clms,",
 				"          tot_drug_cst = Tot_Drug_Cst,",
 				"          tot_benes = Tot_Benes,",
