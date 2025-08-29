@@ -67,3 +67,25 @@ variable "directory_structure" {
     "provider_and_drug"
   ]
 }
+
+variable "silver_zone_directory_structure" {
+  description = "Directory structure for silver container"
+  type = list(string)
+  default = [ 
+    "silver_providers_cleaned",
+    "silver_drugs_standardized",
+    "silver_prescriptions_validated",
+    "silver_geography_reference"
+  ]
+}
+
+variable "gold_zone_directory_structure" {
+  description = "Directory structure for gold container"
+  type = list(string)
+  default = [ 
+    "gold_provider_performance_metrics",
+    "gold_drug_market_analysis",
+    "gold_market_geography_insights",
+    "gold_therapeutic_area_trends"
+  ]
+}

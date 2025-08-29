@@ -105,7 +105,7 @@ resource "azurerm_storage_data_lake_gen2_path" "dynamic_raw_dirs" {
 }
 
 resource "azurerm_storage_data_lake_gen2_path" "dynamic_silver_dirs" {
-  for_each = toset(var.directory_structure)
+  for_each = toset(var.silver_zone_directory_structure)
   
   path               = each.value
   filesystem_name    = azurerm_storage_data_lake_gen2_filesystem.silver.name
@@ -114,7 +114,7 @@ resource "azurerm_storage_data_lake_gen2_path" "dynamic_silver_dirs" {
 }
 
 resource "azurerm_storage_data_lake_gen2_path" "dynamic_gold_dirs" {
-  for_each = toset(var.directory_structure)
+  for_each = toset(var.gold_zone_directory_structure)
   
   path               = each.value
   filesystem_name    = azurerm_storage_data_lake_gen2_filesystem.gold.name
