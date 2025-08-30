@@ -1,0 +1,137 @@
+{
+	"name": "gold_ingestion_dataflow",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "silverprovidersource"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "geographysilverzonerecords"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "dimproviderssink"
+				}
+			],
+			"transformations": [
+				{
+					"name": "filteractiverecords"
+				},
+				{
+					"name": "selectsilverproviderrecords"
+				},
+				{
+					"name": "providerjoinedgeography"
+				},
+				{
+					"name": "finaldimproviderrecords"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          provider_id as integer,",
+				"          provider_name_full as string,",
+				"          provider_type_standardized as string,",
+				"          city_standardized as string,",
+				"          state_code as string,",
+				"          state_name as string,",
+				"          provider_entity_type as string,",
+				"          is_high_volume_provider as boolean,",
+				"          effective_date as timestamp,",
+				"          end_date as timestamp,",
+				"          is_current as boolean,",
+				"          etl_load_date_time as timestamp",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'silver',",
+				"     folderPath: 'silver_providers_cleaned') ~> silverprovidersource",
+				"source(output(",
+				"          geography_id as string,",
+				"          state_code as string,",
+				"          state_name as string,",
+				"          fips_code as string,",
+				"          census_region as string,",
+				"          census_division as string,",
+				"          etl_load_date_time as timestamp,",
+				"          is_current as boolean,",
+				"          effective_date as timestamp,",
+				"          end_date as timestamp",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'silver',",
+				"     folderPath: 'silver_geography_reference') ~> geographysilverzonerecords",
+				"silverprovidersource filter(equals(is_current,true())) ~> filteractiverecords",
+				"filteractiverecords select(mapColumn(",
+				"          provider_id,",
+				"          provider_name = provider_name_full,",
+				"          provider_specialty = provider_type_standardized,",
+				"          provider_entity_type,",
+				"          is_high_volume_provider,",
+				"          city = city_standardized,",
+				"          state_code,",
+				"          state_name",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> selectsilverproviderrecords",
+				"selectsilverproviderrecords, geographysilverzonerecords join(selectsilverproviderrecords@state_code == geographysilverzonerecords@state_code,",
+				"     joinType:'left',",
+				"     matchType:'exact',",
+				"     ignoreSpaces: false,",
+				"     broadcast: 'auto')~> providerjoinedgeography",
+				"providerjoinedgeography select(mapColumn(",
+				"          provider_id,",
+				"          provider_name,",
+				"          provider_specialty,",
+				"          provider_entity_type,",
+				"          is_high_volume_provider,",
+				"          city,",
+				"          state_code = selectsilverproviderrecords@state_code,",
+				"          state_name = selectsilverproviderrecords@state_name,",
+				"          region = census_region,",
+				"          division = census_division",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> finaldimproviderrecords",
+				"finaldimproviderrecords sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'gold',",
+				"     folderPath: 'gold_drug_market_analysis',",
+				"     mergeSchema: false,",
+				"     autoCompact: false,",
+				"     optimizedWrite: false,",
+				"     vacuum: 0,",
+				"     deletable: false,",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     upsertable: false,",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> dimproviderssink"
+			]
+		}
+	}
+}
