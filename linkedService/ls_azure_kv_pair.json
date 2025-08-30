@@ -4,7 +4,7 @@
 		"annotations": [],
 		"type": "AzureKeyVault",
 		"typeProperties": {
-			"baseUrl": "https://kv-medicare-dev-6g9wdd.vault.azure.net/"
+			"baseUrl": "https://kv-medicare-dev-yiruh5.vault.azure.net/"
 		}
 	}
 }
