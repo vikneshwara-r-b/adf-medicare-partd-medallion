@@ -726,6 +726,7 @@
 				"     format: 'delta',",
 				"     fileSystem: 'silver',",
 				"     folderPath: 'silver_prescriptions_validated',",
+				"     overwrite: true,",
 				"     mergeSchema: false,",
 				"     autoCompact: false,",
 				"     optimizedWrite: false,",
