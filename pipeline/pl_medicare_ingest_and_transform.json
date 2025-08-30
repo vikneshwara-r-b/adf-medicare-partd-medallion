@@ -1,0 +1,103 @@
+{
+	"name": "pl_medicare_ingest_and_transform",
+	"properties": {
+		"activities": [
+			{
+				"name": "Iterate through source folders",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.source_to_staging_copy_config",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "copy_data_from_source_to_staging",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "AzureBlobFSReadSettings",
+										"recursive": true,
+										"wildcardFolderPath": "@item().directoryname",
+										"wildcardFileName": {
+											"value": "*",
+											"type": "Expression"
+										},
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".csv"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "ds_source_csv_format",
+									"type": "DatasetReference",
+									"parameters": {
+										"directoryname": {
+											"value": "@item().directoryname",
+											"type": "Expression"
+										},
+										"compression": {
+											"value": "@item().compressiontype",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "ds_target_csv_format",
+									"type": "DatasetReference",
+									"parameters": {
+										"directoryname": "@item().directoryname"
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"source_to_staging_copy_config": {
+				"type": "array"
+			}
+		},
+		"annotations": []
+	}
+}
