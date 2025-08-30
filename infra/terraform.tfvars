@@ -14,9 +14,10 @@ silver_zone_directory_structure = [
     "silver_prescriptions_validated",
     "silver_geography_reference"
 ]
-gold_zone_directory_structure = [ 
-    "gold_provider_performance_metrics",
-    "gold_drug_market_analysis",
-    "gold_market_geography_insights",
-    "gold_therapeutic_area_trends"
+gold_zone_directory_structure = [
+ "dim_providers",
+  "dim_drugs",
+  "dim_geography",
+  "dim_therapeutic_areas",
+  "fact_prescriptions"
 ]
