@@ -1,0 +1,2009 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "adf-medicaredatapipeline-dev-yiruh5"
+		},
+		"ls_azure_kv_pair_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://kv-medicare-dev-yiruh5.vault.azure.net/"
+		},
+		"ls_adls_gen2_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://medicaredevsa.dfs.core.windows.net/"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_azure_kv_pair')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureKeyVault",
+				"typeProperties": {
+					"baseUrl": "[parameters('ls_azure_kv_pair_properties_typeProperties_baseUrl')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_adls_gen2')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('ls_adls_gen2_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "ls_azure_kv_pair",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "storage-connection-access-key"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_azure_kv_pair')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_source_csv_format')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_gen2",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"directoryname": {
+						"type": "string"
+					},
+					"compression": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().directoryname",
+							"type": "Expression"
+						},
+						"fileSystem": "source"
+					},
+					"columnDelimiter": ",",
+					"compressionCodec": {
+						"value": "@if(equals(dataset().compression, 'None'), null, dataset().compression)",
+						"type": "Expression"
+					},
+					"escapeChar": "\"",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_gen2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_target_csv_format')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_gen2",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"directoryname": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().directoryname",
+							"type": "Expression"
+						},
+						"fileSystem": "staging"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\"",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_gen2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/bronze_ingestion_dataflow')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "providerstream"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "geographydrugstream"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "providerdrugstream"
+						}
+					],
+					"sinks": [
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "providerbronzesink",
+							"rejectedDataLinkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "geographydrugbronzesink"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "providerdrugbronzesink"
+						}
+					],
+					"transformations": [
+						{
+							"name": "selectprovider"
+						},
+						{
+							"name": "upsertconditionforproviderstream"
+						},
+						{
+							"name": "changedatatypesforproviderstream"
+						},
+						{
+							"name": "providerstreamderivedmetadatacolumn"
+						},
+						{
+							"name": "selectgeographydrugcolumns"
+						},
+						{
+							"name": "geographydrugstreamdatatypecasting"
+						},
+						{
+							"name": "geographydrugderivedmetadatacolumn"
+						},
+						{
+							"name": "upsertconditionforgeographydrugstream"
+						},
+						{
+							"name": "selectdrugstreamcolumns"
+						},
+						{
+							"name": "providerdrugstreamdatatypecasting"
+						},
+						{
+							"name": "providerdrugstreamderivedcolumn"
+						},
+						{
+							"name": "upsertconditionforproviderdrugstream"
+						}
+					],
+					"scriptLines": [
+						"source(output(",
+						"          Prscrbr_NPI as integer,",
+						"          Prscrbr_Last_Org_Name as string,",
+						"          Prscrbr_First_Name as string,",
+						"          Prscrbr_MI as string,",
+						"          Prscrbr_Crdntls as string,",
+						"          Prscrbr_Gndr as string,",
+						"          Prscrbr_Ent_Cd as string,",
+						"          Prscrbr_St1 as string,",
+						"          Prscrbr_St2 as string,",
+						"          Prscrbr_City as string,",
+						"          Prscrbr_State_Abrvtn as string,",
+						"          Prscrbr_State_FIPS as short,",
+						"          Prscrbr_zip5 as integer,",
+						"          Prscrbr_RUCA as double,",
+						"          Prscrbr_RUCA_Desc as string,",
+						"          Prscrbr_Cntry as string,",
+						"          Prscrbr_Type as string,",
+						"          Prscrbr_Type_Src as string,",
+						"          Tot_Clms as short,",
+						"          Tot_30day_Fills as double,",
+						"          Tot_Drug_Cst as double,",
+						"          Tot_Day_Suply as integer,",
+						"          Tot_Benes as short,",
+						"          GE65_Sprsn_Flag as string,",
+						"          GE65_Tot_Clms as short,",
+						"          GE65_Tot_30day_Fills as double,",
+						"          GE65_Tot_Drug_Cst as double,",
+						"          GE65_Tot_Day_Suply as integer,",
+						"          GE65_Bene_Sprsn_Flag as string,",
+						"          GE65_Tot_Benes as short,",
+						"          Brnd_Sprsn_Flag as string,",
+						"          Brnd_Tot_Clms as short,",
+						"          Brnd_Tot_Drug_Cst as double,",
+						"          Gnrc_Sprsn_Flag as string,",
+						"          Gnrc_Tot_Clms as short,",
+						"          Gnrc_Tot_Drug_Cst as double,",
+						"          Othr_Sprsn_Flag as string,",
+						"          Othr_Tot_Clms as short,",
+						"          Othr_Tot_Drug_Cst as double,",
+						"          MAPD_Sprsn_Flag as string,",
+						"          MAPD_Tot_Clms as short,",
+						"          MAPD_Tot_Drug_Cst as double,",
+						"          PDP_Sprsn_Flag as string,",
+						"          PDP_Tot_Clms as short,",
+						"          PDP_Tot_Drug_Cst as double,",
+						"          LIS_Sprsn_Flag as string,",
+						"          LIS_Tot_Clms as short,",
+						"          LIS_Drug_Cst as double,",
+						"          NonLIS_Sprsn_Flag as string,",
+						"          NonLIS_Tot_Clms as short,",
+						"          NonLIS_Drug_Cst as double,",
+						"          Opioid_Tot_Clms as short,",
+						"          Opioid_Tot_Drug_Cst as double,",
+						"          Opioid_Tot_Suply as integer,",
+						"          Opioid_Tot_Benes as short,",
+						"          Opioid_Prscrbr_Rate as double,",
+						"          Opioid_LA_Tot_Clms as short,",
+						"          Opioid_LA_Tot_Drug_Cst as double,",
+						"          Opioid_LA_Tot_Suply as short,",
+						"          Opioid_LA_Tot_Benes as short,",
+						"          Opioid_LA_Prscrbr_Rate as double,",
+						"          Antbtc_Tot_Clms as short,",
+						"          Antbtc_Tot_Drug_Cst as double,",
+						"          Antbtc_Tot_Benes as short,",
+						"          Antpsyct_GE65_Sprsn_Flag as string,",
+						"          Antpsyct_GE65_Tot_Clms as short,",
+						"          Antpsyct_GE65_Tot_Drug_Cst as double,",
+						"          Antpsyct_GE65_Bene_Suprsn_Flag as string,",
+						"          Antpsyct_GE65_Tot_Benes as short,",
+						"          Bene_Avg_Age as double,",
+						"          Bene_Age_LT_65_Cnt as short,",
+						"          Bene_Age_65_74_Cnt as short,",
+						"          Bene_Age_75_84_Cnt as short,",
+						"          Bene_Age_GT_84_Cnt as short,",
+						"          Bene_Feml_Cnt as short,",
+						"          Bene_Male_Cnt as short,",
+						"          Bene_Race_Wht_Cnt as short,",
+						"          Bene_Race_Black_Cnt as short,",
+						"          Bene_Race_Api_Cnt as short,",
+						"          Bene_Race_Hspnc_Cnt as short,",
+						"          Bene_Race_Natind_Cnt as short,",
+						"          Bene_Race_Othr_Cnt as short,",
+						"          Bene_Dual_Cnt as short,",
+						"          Bene_Ndual_Cnt as short,",
+						"          Bene_Avg_Risk_Scre as double",
+						"     ),",
+						"     useSchema: false,",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     rowUrlColumn: 'source_file_name',",
+						"     format: 'delimited',",
+						"     fileSystem: 'staging',",
+						"     columnDelimiter: ',',",
+						"     escapeChar: '\\\"',",
+						"     quoteChar: '\\\"',",
+						"     columnNamesAsHeader: true,",
+						"     wildcardPaths:['prescriber_by_provider/*']) ~> providerstream",
+						"source(output(",
+						"          Prscrbr_Geo_Lvl as string,",
+						"          Prscrbr_Geo_Cd as string,",
+						"          Prscrbr_Geo_Desc as string,",
+						"          Brnd_Name as string,",
+						"          Gnrc_Name as string,",
+						"          Tot_Prscrbrs as integer,",
+						"          Tot_Clms as integer,",
+						"          Tot_30day_Fills as double,",
+						"          Tot_Drug_Cst as double,",
+						"          Tot_Benes as integer,",
+						"          GE65_Sprsn_Flag as string,",
+						"          GE65_Tot_Clms as integer,",
+						"          GE65_Tot_30day_Fills as double,",
+						"          GE65_Tot_Drug_Cst as double,",
+						"          GE65_Bene_Sprsn_Flag as string,",
+						"          GE65_Tot_Benes as integer,",
+						"          LIS_Bene_Cst_Shr as double,",
+						"          NonLIS_Bene_Cst_Shr as double,",
+						"          Opioid_Drug_Flag as boolean,",
+						"          Opioid_LA_Drug_Flag as boolean,",
+						"          Antbtc_Drug_Flag as boolean,",
+						"          Antpsyct_Drug_Flag as boolean",
+						"     ),",
+						"     useSchema: false,",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     rowUrlColumn: 'source_file_name',",
+						"     format: 'delimited',",
+						"     fileSystem: 'staging',",
+						"     columnDelimiter: ',',",
+						"     escapeChar: '\\\"',",
+						"     quoteChar: '\\\"',",
+						"     columnNamesAsHeader: true,",
+						"     wildcardPaths:['geography_and_drug']) ~> geographydrugstream",
+						"source(output(",
+						"          Prscrbr_NPI as integer,",
+						"          Prscrbr_Last_Org_Name as string,",
+						"          Prscrbr_First_Name as string,",
+						"          Prscrbr_City as string,",
+						"          Prscrbr_State_Abrvtn as string,",
+						"          Prscrbr_State_FIPS as short,",
+						"          Prscrbr_Type as string,",
+						"          Prscrbr_Type_Src as string,",
+						"          Brnd_Name as string,",
+						"          Gnrc_Name as string,",
+						"          Tot_Clms as short,",
+						"          Tot_30day_Fills as double,",
+						"          Tot_Day_Suply as integer,",
+						"          Tot_Drug_Cst as double,",
+						"          Tot_Benes as short,",
+						"          GE65_Sprsn_Flag as string,",
+						"          GE65_Tot_Clms as short,",
+						"          GE65_Tot_30day_Fills as double,",
+						"          GE65_Tot_Drug_Cst as double,",
+						"          GE65_Tot_Day_Suply as integer,",
+						"          GE65_Bene_Sprsn_Flag as string,",
+						"          GE65_Tot_Benes as short",
+						"     ),",
+						"     useSchema: false,",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     rowUrlColumn: 'source_file_name',",
+						"     format: 'delimited',",
+						"     fileSystem: 'staging',",
+						"     columnDelimiter: ',',",
+						"     escapeChar: '\\\"',",
+						"     quoteChar: '\\\"',",
+						"     columnNamesAsHeader: true,",
+						"     wildcardPaths:['provider_and_drug/*']) ~> providerdrugstream",
+						"providerstream select(mapColumn(",
+						"          each(match(/* All input columns */true()),",
+						"               /* Input name */lower($$) = $$)",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> selectprovider",
+						"providerstreamderivedmetadatacolumn alterRow(upsertIf(1==1)) ~> upsertconditionforproviderstream",
+						"selectprovider cast(output(",
+						"          prscrbr_npi as integer",
+						"     ),",
+						"     errors: true) ~> changedatatypesforproviderstream",
+						"changedatatypesforproviderstream derive(etl_load_date_time = currentTimestamp()) ~> providerstreamderivedmetadatacolumn",
+						"geographydrugstream select(mapColumn(",
+						"          each(match(/* All input columns */true()),",
+						"               /* All input columns */lower($$) = $$)",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> selectgeographydrugcolumns",
+						"selectgeographydrugcolumns cast(output(",
+						"          prscrbr_geo_lvl as string",
+						"     ),",
+						"     errors: true) ~> geographydrugstreamdatatypecasting",
+						"geographydrugstreamdatatypecasting derive(etl_load_date_time = currentTimestamp()) ~> geographydrugderivedmetadatacolumn",
+						"geographydrugderivedmetadatacolumn alterRow(upsertIf(1==1)) ~> upsertconditionforgeographydrugstream",
+						"providerdrugstream select(mapColumn(",
+						"          each(match(/* All input columns */true()),",
+						"               /* All input columns */lower($$) = $$)",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> selectdrugstreamcolumns",
+						"selectdrugstreamcolumns cast(output(",
+						"          prscrbr_npi as string,",
+						"          tot_clms as long,",
+						"          tot_drug_cst as decimal(10,0),",
+						"          tot_benes as long,",
+						"          ge65_tot_clms as long",
+						"     ),",
+						"     errors: true) ~> providerdrugstreamdatatypecasting",
+						"providerdrugstreamdatatypecasting derive(etl_load_date_time = currentTimestamp()) ~> providerdrugstreamderivedcolumn",
+						"providerdrugstreamderivedcolumn alterRow(updateIf(1==1)) ~> upsertconditionforproviderdrugstream",
+						"upsertconditionforproviderstream sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'raw',",
+						"     folderPath: 'prescriber_by_provider',",
+						"     mergeSchema: true,",
+						"     autoCompact: true,",
+						"     optimizedWrite: true,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: false,",
+						"     updateable: false,",
+						"     upsertable: true,",
+						"     keys:['prscrbr_npi'],",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> providerbronzesink",
+						"upsertconditionforgeographydrugstream sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'raw',",
+						"     folderPath: 'geography_and_drug',",
+						"     mergeSchema: true,",
+						"     autoCompact: true,",
+						"     optimizedWrite: true,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: false,",
+						"     updateable: false,",
+						"     upsertable: true,",
+						"     keys:['brnd_name','gnrc_name','prscrbr_geo_cd'],",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> geographydrugbronzesink",
+						"upsertconditionforproviderdrugstream sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'raw',",
+						"     folderPath: 'provider_and_drug',",
+						"     mergeSchema: false,",
+						"     autoCompact: true,",
+						"     optimizedWrite: true,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: false,",
+						"     updateable: false,",
+						"     upsertable: true,",
+						"     keys:['prscrbr_npi','brnd_name','gnrc_name'],",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> providerdrugbronzesink"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_gen2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/gold_ingestion_dataflow')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "silverprovidersource"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "geographysilverzonerecords"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "silverdrugsstandardized"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "silverprescriptionsvalidated"
+						}
+					],
+					"sinks": [
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "dimproviderssink"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "dimdrugsink"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "dimtherapeuticssink"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "dimgeographysink"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "factprescriptionssink"
+						}
+					],
+					"transformations": [
+						{
+							"name": "filteractiverecords"
+						},
+						{
+							"name": "selectsilverproviderrecords"
+						},
+						{
+							"name": "providerjoinedgeography"
+						},
+						{
+							"name": "finaldimproviderrecords"
+						},
+						{
+							"name": "selectsilverdrugsstandardized"
+						},
+						{
+							"name": "surrogateKeydimdrug"
+						},
+						{
+							"name": "geographysilverselectcols"
+						},
+						{
+							"name": "surrogateKeydimgeography"
+						},
+						{
+							"name": "dimgeographyderivedcols"
+						},
+						{
+							"name": "therapeuticstatsaggregate"
+						},
+						{
+							"name": "dimtherapeuticssurrogateKey"
+						},
+						{
+							"name": "derivedColumndimtherapeutics"
+						},
+						{
+							"name": "dimprovidersurrogateKey"
+						},
+						{
+							"name": "dimterapeuticssurrogateKey"
+						},
+						{
+							"name": "prescriptionjoinedproviders"
+						},
+						{
+							"name": "prescriptionjoineddrug"
+						},
+						{
+							"name": "silverprescriptionsvalidatedderivedColumn"
+						},
+						{
+							"name": "filtersilverprescriptionsvalidatedrows"
+						},
+						{
+							"name": "silverprescriptionsjoinedgeography"
+						},
+						{
+							"name": "silverprescriptionsjoindimtherapeutics"
+						},
+						{
+							"name": "factprescriptionsselectcols"
+						}
+					],
+					"scriptLines": [
+						"source(output(",
+						"          provider_id as integer,",
+						"          provider_name_full as string,",
+						"          provider_type_standardized as string,",
+						"          city_standardized as string,",
+						"          state_code as string,",
+						"          state_name as string,",
+						"          provider_entity_type as string,",
+						"          is_high_volume_provider as boolean,",
+						"          effective_date as timestamp,",
+						"          end_date as timestamp,",
+						"          is_current as boolean,",
+						"          etl_load_date_time as timestamp",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'silver',",
+						"     folderPath: 'silver_providers_cleaned') ~> silverprovidersource",
+						"source(output(",
+						"          geography_id as string,",
+						"          state_code as string,",
+						"          state_name as string,",
+						"          fips_code as string,",
+						"          census_region as string,",
+						"          census_division as string,",
+						"          etl_load_date_time as timestamp,",
+						"          is_current as boolean,",
+						"          effective_date as timestamp,",
+						"          end_date as timestamp",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'silver',",
+						"     folderPath: 'silver_geography_reference') ~> geographysilverzonerecords",
+						"source(output(",
+						"          drug_id as string,",
+						"          brand_name_standardized as string,",
+						"          generic_name_standardized as string,",
+						"          therapeutic_class as string,",
+						"          drug_category as string,",
+						"          is_controlled_substance as boolean,",
+						"          is_opioid as boolean,",
+						"          is_long_acting_opioid as boolean,",
+						"          is_antibiotic as boolean,",
+						"          is_antipsychotic as boolean,",
+						"          avg_cost_per_claim as double,",
+						"          is_current as boolean,",
+						"          effective_date as timestamp,",
+						"          end_date as timestamp,",
+						"          etl_load_date_time as timestamp",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'silver',",
+						"     folderPath: 'silver_drugs_standardized') ~> silverdrugsstandardized",
+						"source(output(",
+						"          prescription_id as string,",
+						"          provider_id as string,",
+						"          drug_id as string,",
+						"          geography_level as string,",
+						"          state_code as string,",
+						"          total_claims as long,",
+						"          total_30day_fills as double,",
+						"          total_drug_cost as decimal(10,0),",
+						"          total_beneficiaries as long,",
+						"          claims_65_plus as long,",
+						"          cost_65_plus as long,",
+						"          beneficiaries_65_plus as long,",
+						"          is_suppressed as boolean,",
+						"          data_reporting_period as integer,",
+						"          etl_load_date_time as timestamp,",
+						"          effective_date as timestamp,",
+						"          end_date as timestamp,",
+						"          is_current as boolean",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'silver',",
+						"     folderPath: 'silver_prescriptions_validated') ~> silverprescriptionsvalidated",
+						"silverprovidersource filter(equals(is_current,true())) ~> filteractiverecords",
+						"filteractiverecords select(mapColumn(",
+						"          provider_id,",
+						"          provider_name = provider_name_full,",
+						"          provider_specialty = provider_type_standardized,",
+						"          provider_entity_type,",
+						"          is_high_volume_provider,",
+						"          city = city_standardized,",
+						"          state_code,",
+						"          state_name",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> selectsilverproviderrecords",
+						"selectsilverproviderrecords, geographysilverzonerecords join(selectsilverproviderrecords@state_code == geographysilverzonerecords@state_code,",
+						"     joinType:'left',",
+						"     matchType:'exact',",
+						"     ignoreSpaces: false,",
+						"     broadcast: 'auto')~> providerjoinedgeography",
+						"providerjoinedgeography select(mapColumn(",
+						"          provider_id,",
+						"          provider_name,",
+						"          provider_specialty,",
+						"          provider_entity_type,",
+						"          is_high_volume_provider,",
+						"          city,",
+						"          state_code = selectsilverproviderrecords@state_code,",
+						"          state_name = selectsilverproviderrecords@state_name,",
+						"          region = census_region,",
+						"          division = census_division",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> finaldimproviderrecords",
+						"silverdrugsstandardized select(mapColumn(",
+						"          drug_id,",
+						"          brand_name = brand_name_standardized,",
+						"          generic_name = generic_name_standardized,",
+						"          therapeutic_class,",
+						"          drug_category,",
+						"          is_controlled_substance,",
+						"          is_opioid,",
+						"          is_long_acting_opioid,",
+						"          is_antibiotic,",
+						"          is_antipsychotic,",
+						"          avg_cost_per_claim",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> selectsilverdrugsstandardized",
+						"selectsilverdrugsstandardized keyGenerate(output(drug_key as long),",
+						"     startAt: 1L,",
+						"     stepValue: 1L) ~> surrogateKeydimdrug",
+						"geographysilverzonerecords select(mapColumn(",
+						"          state_code,",
+						"          state_name,",
+						"          fips_code,",
+						"          census_region,",
+						"          census_division",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> geographysilverselectcols",
+						"geographysilverselectcols keyGenerate(output(geography_key as long),",
+						"     startAt: 1L,",
+						"     stepValue: 1L) ~> surrogateKeydimgeography",
+						"surrogateKeydimgeography derive(is_territory = /* CASE WHEN g.state_code IN ('PR','VI','GU','AS','MP') THEN TRUE ELSE FALSE END */",
+						"case(in(['PR','VI','GU','AS','MP'],state_code), true(), false()),",
+						"          region_sort_order = /* CASE g.census_region WHEN 'Northeast' THEN 1 WHEN 'Midwest' THEN 2 WHEN 'South' THEN 3 WHEN 'West' THEN 4 ELSE 5 END */",
+						"case(",
+						"    census_region == 'Northeast',1,",
+						"    census_region == 'Midwest', 2,",
+						"    census_region == 'South', 3,",
+						"    census_region == 'West', 4,",
+						"    5",
+						")) ~> dimgeographyderivedcols",
+						"silverdrugsstandardized aggregate(groupBy(therapeutic_class),",
+						"     avg_cost = avg(avg_cost_per_claim),",
+						"          opioid_count = /* SUM(CASE WHEN d.is_opioid = TRUE THEN 1 ELSE 0 END) */",
+						"sum(iif(is_opioid, 1, 0)),",
+						"          controlled_count = /* SUM(CASE WHEN d.is_controlled_substance = TRUE THEN 1 ELSE 0 END) as controlled_count */",
+						"sum(iif(is_controlled_substance,1,0))) ~> therapeuticstatsaggregate",
+						"therapeuticstatsaggregate keyGenerate(output(therapeutic_area_key as long),",
+						"     startAt: 1L,",
+						"     stepValue: 1L) ~> dimtherapeuticssurrogateKey",
+						"dimtherapeuticssurrogateKey derive(therapeutic_category = case(like(therapeutic_class,'%Cardiovascular%'), 'Cardiovascular', ",
+						"like(therapeutic_class, '%Endocrine%'), 'Endocrine',",
+						"like(therapeutic_class, '%Psychiatric%'), 'Mental Health',",
+						"like(therapeutic_class, '%Pain%'), 'Pain Management',",
+						"like(therapeutic_class, '%Anti-Infective%'), 'Anti-Infective',",
+						"'Other'",
+						"),",
+						"          is_chronic_condition = case(in(['Cardiovascular - Statins', 'Endocrine - Diabetes', 'Psychiatric - Antidepressants'],therapeutic_class ), true(), false()),",
+						"          is_high_cost_area = iif(avg_cost > 100, true(), false()),",
+						"          primary_patient_age_group = case(",
+						"    or(like(therapeutic_class, '%Cardiovascular%'), like(therapeutic_class, '%Endocrine%')),'Elderly',",
+						"    like(therapeutic_class, '%Psychiatric%'),'Adult',",
+						"    'All Ages'",
+						"),",
+						"          regulatory_risk_level = case(opioid_count > 0, 'High',",
+						"controlled_count > 0, 'Medium',",
+						"'Low')) ~> derivedColumndimtherapeutics",
+						"finaldimproviderrecords keyGenerate(output(provider_key as long),",
+						"     startAt: 1L,",
+						"     stepValue: 1L) ~> dimprovidersurrogateKey",
+						"derivedColumndimtherapeutics keyGenerate(output(therapeutic_area_key as long),",
+						"     startAt: 1L,",
+						"     stepValue: 1L) ~> dimterapeuticssurrogateKey",
+						"filtersilverprescriptionsvalidatedrows, dimprovidersurrogateKey join(toInteger(silverprescriptionsvalidated@provider_id) == finaldimproviderrecords@provider_id,",
+						"     joinType:'inner',",
+						"     matchType:'exact',",
+						"     ignoreSpaces: false,",
+						"     broadcast: 'auto')~> prescriptionjoinedproviders",
+						"prescriptionjoinedproviders, surrogateKeydimdrug join(silverprescriptionsvalidated@drug_id == selectsilverdrugsstandardized@drug_id,",
+						"     joinType:'inner',",
+						"     matchType:'exact',",
+						"     ignoreSpaces: false,",
+						"     broadcast: 'auto')~> prescriptionjoineddrug",
+						"silverprescriptionsvalidated derive(data_quality_flag = case(is_suppressed, 'SUPPRESSED', isNull(total_claims),'MISSING','CLEAN'),",
+						"          last_updated = currentTimestamp()) ~> silverprescriptionsvalidatedderivedColumn",
+						"silverprescriptionsvalidatedderivedColumn filter(and(is_suppressed==false(), not(isNull(total_claims)))) ~> filtersilverprescriptionsvalidatedrows",
+						"prescriptionjoineddrug, dimgeographyderivedcols join(silverprescriptionsvalidated@state_code == geographysilverselectcols@state_code,",
+						"     joinType:'inner',",
+						"     matchType:'exact',",
+						"     ignoreSpaces: false,",
+						"     broadcast: 'auto')~> silverprescriptionsjoinedgeography",
+						"silverprescriptionsjoinedgeography, dimtherapeuticssurrogateKey join(selectsilverdrugsstandardized@therapeutic_class == therapeuticstatsaggregate@therapeutic_class,",
+						"     joinType:'left',",
+						"     matchType:'exact',",
+						"     ignoreSpaces: false,",
+						"     broadcast: 'auto')~> silverprescriptionsjoindimtherapeutics",
+						"silverprescriptionsjoindimtherapeutics select(mapColumn(",
+						"          provider_key,",
+						"          drug_key,",
+						"          geography_key,",
+						"          therapeutic_area_key,",
+						"          total_claims,",
+						"          total_beneficiaries,",
+						"          total_cost = total_drug_cost,",
+						"          total_30day_fills,",
+						"          elderly_claims = claims_65_plus,",
+						"          elderly_beneficiaries = beneficiaries_65_plus,",
+						"          elderly_cost = cost_65_plus,",
+						"          data_quality_flag,",
+						"          last_updated",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> factprescriptionsselectcols",
+						"dimprovidersurrogateKey sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'gold',",
+						"     folderPath: 'dim_providers',",
+						"     overwrite: true,",
+						"     mergeSchema: false,",
+						"     autoCompact: false,",
+						"     optimizedWrite: false,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: true,",
+						"     updateable: false,",
+						"     upsertable: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> dimproviderssink",
+						"surrogateKeydimdrug sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'gold',",
+						"     folderPath: 'dim_drugs',",
+						"     overwrite: true,",
+						"     mergeSchema: false,",
+						"     autoCompact: false,",
+						"     optimizedWrite: false,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: true,",
+						"     updateable: false,",
+						"     upsertable: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     mapColumn(",
+						"          drug_id,",
+						"          brand_name,",
+						"          generic_name,",
+						"          therapeutic_class,",
+						"          drug_category,",
+						"          is_controlled_substance,",
+						"          is_opioid,",
+						"          is_long_acting_opioid,",
+						"          is_antibiotic,",
+						"          is_antipsychotic,",
+						"          avg_cost_per_claim,",
+						"          drug_key",
+						"     )) ~> dimdrugsink",
+						"dimterapeuticssurrogateKey sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'gold',",
+						"     folderPath: 'dim_therapeutic_areas',",
+						"     overwrite: true,",
+						"     mergeSchema: false,",
+						"     autoCompact: false,",
+						"     optimizedWrite: false,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: true,",
+						"     updateable: false,",
+						"     upsertable: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> dimtherapeuticssink",
+						"dimgeographyderivedcols sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'gold',",
+						"     folderPath: 'dim_geography',",
+						"     overwrite: true,",
+						"     mergeSchema: false,",
+						"     autoCompact: false,",
+						"     optimizedWrite: false,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: true,",
+						"     updateable: false,",
+						"     upsertable: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> dimgeographysink",
+						"factprescriptionsselectcols sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'gold',",
+						"     folderPath: 'fact_prescriptions',",
+						"     overwrite: true,",
+						"     mergeSchema: false,",
+						"     autoCompact: false,",
+						"     optimizedWrite: false,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: true,",
+						"     updateable: false,",
+						"     upsertable: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> factprescriptionssink"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_gen2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/silver_ingestion_dataflow')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "providerstream"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "geographybydrugstream"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "providerdrugrawsource"
+						}
+					],
+					"sinks": [
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "silverproviderscleanedsink",
+							"rejectedDataLinkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "silverdrugsstandardizedsink"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "silverprescriptionsvalidatedsink"
+						},
+						{
+							"linkedService": {
+								"referenceName": "ls_adls_gen2",
+								"type": "LinkedServiceReference"
+							},
+							"name": "silvergeographyreferencesink"
+						}
+					],
+					"transformations": [
+						{
+							"name": "providerstreamderivedcolumns"
+						},
+						{
+							"name": "renameproviderstreamcolumns"
+						},
+						{
+							"name": "selectgeographybydrugstreamcols"
+						},
+						{
+							"name": "geographybydrugderivedcols"
+						},
+						{
+							"name": "selectproviderstreamcolumns"
+						},
+						{
+							"name": "selectdrugandclaimcost"
+						},
+						{
+							"name": "calculateaveragecostperclaim"
+						},
+						{
+							"name": "filtervalidclaimanddrugtotals"
+						},
+						{
+							"name": "joinedgeographydrugdataset"
+						},
+						{
+							"name": "derivedColumnsforsilverdrugstandardization"
+						},
+						{
+							"name": "silverdrugstandardizedcolumns"
+						},
+						{
+							"name": "geographybydrugselectcols"
+						},
+						{
+							"name": "geographybydrugrawderivedcols"
+						},
+						{
+							"name": "geographybydrugrawderivedcolspart2"
+						},
+						{
+							"name": "geographydrugrecordsflow"
+						},
+						{
+							"name": "providerdrugrawderivedcolspart1"
+						},
+						{
+							"name": "providerdrugrawderivedcolspart2"
+						},
+						{
+							"name": "providerdrugrecordsflow"
+						},
+						{
+							"name": "providerdrugunionprovidergeo"
+						},
+						{
+							"name": "aggregatedgeoinfo"
+						},
+						{
+							"name": "derivedColumngeoinfo"
+						},
+						{
+							"name": "filternullgeolvlrecords"
+						},
+						{
+							"name": "derivedColumngeoinfopart2"
+						},
+						{
+							"name": "geoinfoselectcols"
+						},
+						{
+							"name": "silverprescriptionsvalidatedsteram"
+						}
+					],
+					"scriptLines": [
+						"source(output(",
+						"          prscrbr_npi as integer,",
+						"          prscrbr_last_org_name as string,",
+						"          prscrbr_first_name as string,",
+						"          prscrbr_mi as string,",
+						"          prscrbr_crdntls as string,",
+						"          prscrbr_gndr as string,",
+						"          prscrbr_ent_cd as string,",
+						"          prscrbr_st1 as string,",
+						"          prscrbr_st2 as string,",
+						"          prscrbr_city as string,",
+						"          prscrbr_state_abrvtn as string,",
+						"          prscrbr_state_fips as short,",
+						"          prscrbr_zip5 as integer,",
+						"          prscrbr_ruca as double,",
+						"          prscrbr_ruca_desc as string,",
+						"          prscrbr_cntry as string,",
+						"          prscrbr_type as string,",
+						"          prscrbr_type_src as string,",
+						"          tot_clms as short,",
+						"          tot_30day_fills as double,",
+						"          tot_drug_cst as double,",
+						"          tot_day_suply as integer,",
+						"          tot_benes as short,",
+						"          ge65_sprsn_flag as string,",
+						"          ge65_tot_clms as short,",
+						"          ge65_tot_30day_fills as double,",
+						"          ge65_tot_drug_cst as double,",
+						"          ge65_tot_day_suply as integer,",
+						"          ge65_bene_sprsn_flag as string,",
+						"          ge65_tot_benes as short,",
+						"          brnd_sprsn_flag as string,",
+						"          brnd_tot_clms as short,",
+						"          brnd_tot_drug_cst as double,",
+						"          gnrc_sprsn_flag as string,",
+						"          gnrc_tot_clms as short,",
+						"          gnrc_tot_drug_cst as double,",
+						"          othr_sprsn_flag as string,",
+						"          othr_tot_clms as short,",
+						"          othr_tot_drug_cst as double,",
+						"          mapd_sprsn_flag as string,",
+						"          mapd_tot_clms as short,",
+						"          mapd_tot_drug_cst as double,",
+						"          pdp_sprsn_flag as string,",
+						"          pdp_tot_clms as short,",
+						"          pdp_tot_drug_cst as double,",
+						"          lis_sprsn_flag as string,",
+						"          lis_tot_clms as short,",
+						"          lis_drug_cst as double,",
+						"          nonlis_sprsn_flag as string,",
+						"          nonlis_tot_clms as short,",
+						"          nonlis_drug_cst as double,",
+						"          opioid_tot_clms as short,",
+						"          opioid_tot_drug_cst as double,",
+						"          opioid_tot_suply as integer,",
+						"          opioid_tot_benes as short,",
+						"          opioid_prscrbr_rate as double,",
+						"          opioid_la_tot_clms as short,",
+						"          opioid_la_tot_drug_cst as double,",
+						"          opioid_la_tot_suply as short,",
+						"          opioid_la_tot_benes as short,",
+						"          opioid_la_prscrbr_rate as double,",
+						"          antbtc_tot_clms as short,",
+						"          antbtc_tot_drug_cst as double,",
+						"          antbtc_tot_benes as short,",
+						"          antpsyct_ge65_sprsn_flag as string,",
+						"          antpsyct_ge65_tot_clms as short,",
+						"          antpsyct_ge65_tot_drug_cst as double,",
+						"          antpsyct_ge65_bene_suprsn_flag as string,",
+						"          antpsyct_ge65_tot_benes as short,",
+						"          bene_avg_age as double,",
+						"          bene_age_lt_65_cnt as short,",
+						"          bene_age_65_74_cnt as short,",
+						"          bene_age_75_84_cnt as short,",
+						"          bene_age_gt_84_cnt as short,",
+						"          bene_feml_cnt as short,",
+						"          bene_male_cnt as short,",
+						"          bene_race_wht_cnt as short,",
+						"          bene_race_black_cnt as short,",
+						"          bene_race_api_cnt as short,",
+						"          bene_race_hspnc_cnt as short,",
+						"          bene_race_natind_cnt as short,",
+						"          bene_race_othr_cnt as short,",
+						"          bene_dual_cnt as short,",
+						"          bene_ndual_cnt as short,",
+						"          bene_avg_risk_scre as double,",
+						"          source_file_name as string,",
+						"          etl_load_date_time as timestamp",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'raw',",
+						"     folderPath: 'prescriber_by_provider') ~> providerstream",
+						"source(output(",
+						"          prscrbr_geo_lvl as string,",
+						"          prscrbr_geo_cd as string,",
+						"          prscrbr_geo_desc as string,",
+						"          brnd_name as string,",
+						"          gnrc_name as string,",
+						"          tot_prscrbrs as integer,",
+						"          tot_clms as integer,",
+						"          tot_30day_fills as double,",
+						"          tot_drug_cst as double,",
+						"          tot_benes as integer,",
+						"          ge65_sprsn_flag as string,",
+						"          ge65_tot_clms as integer,",
+						"          ge65_tot_30day_fills as double,",
+						"          ge65_tot_drug_cst as double,",
+						"          ge65_bene_sprsn_flag as string,",
+						"          ge65_tot_benes as integer,",
+						"          lis_bene_cst_shr as double,",
+						"          nonlis_bene_cst_shr as double,",
+						"          opioid_drug_flag as boolean,",
+						"          opioid_la_drug_flag as boolean,",
+						"          antbtc_drug_flag as boolean,",
+						"          antpsyct_drug_flag as boolean,",
+						"          source_file_name as string,",
+						"          etl_load_date_time as timestamp",
+						"     ),",
+						"     allowSchemaDrift: false,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'raw',",
+						"     folderPath: 'geography_and_drug') ~> geographybydrugstream",
+						"source(output(",
+						"          prscrbr_npi as string,",
+						"          prscrbr_last_org_name as string,",
+						"          prscrbr_first_name as string,",
+						"          prscrbr_city as string,",
+						"          prscrbr_state_abrvtn as string,",
+						"          prscrbr_state_fips as short,",
+						"          prscrbr_type as string,",
+						"          prscrbr_type_src as string,",
+						"          brnd_name as string,",
+						"          gnrc_name as string,",
+						"          tot_clms as long,",
+						"          tot_30day_fills as double,",
+						"          tot_day_suply as integer,",
+						"          tot_drug_cst as decimal(10,0),",
+						"          tot_benes as long,",
+						"          ge65_sprsn_flag as string,",
+						"          ge65_tot_clms as long,",
+						"          ge65_tot_30day_fills as double,",
+						"          ge65_tot_drug_cst as double,",
+						"          ge65_tot_day_suply as integer,",
+						"          ge65_bene_sprsn_flag as string,",
+						"          ge65_tot_benes as short,",
+						"          source_file_name as string,",
+						"          etl_load_date_time as timestamp",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'raw',",
+						"     folderPath: 'provider_and_drug') ~> providerdrugrawsource",
+						"renameproviderstreamcolumns derive(provider_name_full = case(",
+						"isNull(prscrbr_first_name),",
+						"trim(prscrbr_last_org_name),",
+						"trim(prscrbr_first_name + ' '+ prscrbr_last_org_name)",
+						"),",
+						"          provider_type_standardized = iif(or(like(prscrbr_type, '%FAMILY%'), like(prscrbr_type,'%GENERAL%')), 'Primary Care', ",
+						"iif(like(prscrbr_type, '%CARDIO%'), 'Cardiology', ",
+						"iif(or(like(prscrbr_type, '%ONCOL%'), like(prscrbr_type, '%HEMATOL%')),'Oncology', ",
+						"iif(like(prscrbr_type,'%PSYCH%'), 'Psychiatry', ",
+						"iif(like(prscrbr_type,'%NEUR%'),'Neurology', 'Other Specialty'))))),",
+						"          city_standardized = upper(trim(regexReplace(prscrbr_city, \"[^A-Za-z\\\\s]\", \"\"))),",
+						"          provider_entity_type = iif(or(isNull(prscrbr_first_name),prscrbr_first_name==''),'Organization','Individual'),",
+						"          is_high_volume_provider = iif(tot_clms > 10000, true(), false()),",
+						"          state_name = case(",
+						"    state_code == 'AL', 'Alabama',",
+						"    state_code == 'AK', 'Alaska',",
+						"    state_code == 'AZ', 'Arizona',",
+						"    state_code == 'AR', 'Arkansas',",
+						"    state_code == 'CA', 'California',",
+						"    state_code == 'CO', 'Colorado',",
+						"    state_code == 'CT', 'Connecticut',",
+						"    state_code == 'DE', 'Delaware',",
+						"    state_code == 'FL', 'Florida',",
+						"    state_code == 'GA', 'Georgia',",
+						"    state_code == 'HI', 'Hawaii',",
+						"    state_code == 'ID', 'Idaho',",
+						"    state_code == 'IL', 'Illinois',",
+						"    state_code == 'IN', 'Indiana',",
+						"    state_code == 'IA', 'Iowa',",
+						"    state_code == 'KS', 'Kansas',",
+						"    state_code == 'KY', 'Kentucky',",
+						"    state_code == 'LA', 'Louisiana',",
+						"    state_code == 'ME', 'Maine',",
+						"    state_code == 'MD', 'Maryland',",
+						"    state_code == 'MA', 'Massachusetts',",
+						"    state_code == 'MI', 'Michigan',",
+						"    state_code == 'MN', 'Minnesota',",
+						"    state_code == 'MS', 'Mississippi',",
+						"    state_code == 'MO', 'Missouri',",
+						"    state_code == 'MT', 'Montana',",
+						"    state_code == 'NE', 'Nebraska',",
+						"    state_code == 'NV', 'Nevada',",
+						"    state_code == 'NH', 'New Hampshire',",
+						"    state_code == 'NJ', 'New Jersey',",
+						"    state_code == 'NM', 'New Mexico',",
+						"    state_code == 'NY', 'New York',",
+						"    state_code == 'NC', 'North Carolina',",
+						"    state_code == 'ND', 'North Dakota',",
+						"    state_code == 'OH', 'Ohio',",
+						"    state_code == 'OK', 'Oklahoma',",
+						"    state_code == 'OR', 'Oregon',",
+						"    state_code == 'PA', 'Pennsylvania',",
+						"    state_code == 'RI', 'Rhode Island',",
+						"    state_code == 'SC', 'South Carolina',",
+						"    state_code == 'SD', 'South Dakota',",
+						"    state_code == 'TN', 'Tennessee',",
+						"    state_code == 'TX', 'Texas',",
+						"    state_code == 'UT', 'Utah',",
+						"    state_code == 'VT', 'Vermont',",
+						"    state_code == 'VA', 'Virginia',",
+						"    state_code == 'WA', 'Washington',",
+						"    state_code == 'WV', 'West Virginia',",
+						"    state_code == 'WI', 'Wisconsin',",
+						"    state_code == 'WY', 'Wyoming',",
+						"    state_code == 'DC', 'District of Columbia',",
+						"    state_code == 'PR', 'Puerto Rico',",
+						"    state_code == 'VI', 'Virgin Islands',",
+						"    state_code == 'GU', 'Guam',",
+						"    state_code == 'AS', 'American Samoa',",
+						"    state_code == 'MP', 'Northern Mariana Islands',",
+						"    state_code == 'AA', 'Armed Forces Americas',",
+						"    state_code == 'AE', 'Armed Forces Europe',",
+						"    state_code == 'AP', 'Armed Forces Pacific',",
+						"    state_code == 'XX', 'Unknown',",
+						"    state_code == 'ZZ', 'Foreign Country',",
+						"    coalesce(state_code, 'Unknown')",
+						"),",
+						"          effective_date = currentTimestamp(),",
+						"          end_date = toTimestamp(null()),",
+						"          is_current = true(),",
+						"          etl_load_date_time = currentTimestamp()) ~> providerstreamderivedcolumns",
+						"providerstream select(mapColumn(",
+						"          provider_id = prscrbr_npi,",
+						"          prscrbr_last_org_name,",
+						"          prscrbr_first_name,",
+						"          prscrbr_city,",
+						"          state_code = prscrbr_state_abrvtn,",
+						"          prscrbr_type,",
+						"          tot_clms,",
+						"          tot_drug_cst,",
+						"          tot_benes,",
+						"          opioid_tot_clms,",
+						"          etl_load_date_time",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> renameproviderstreamcolumns",
+						"geographybydrugstream select(mapColumn(",
+						"          prscrbr_geo_lvl,",
+						"          prscrbr_geo_cd,",
+						"          prscrbr_geo_desc,",
+						"          brnd_name,",
+						"          gnrc_name,",
+						"          tot_clms,",
+						"          tot_drug_cst,",
+						"          tot_benes,",
+						"          is_opioid = opioid_drug_flag,",
+						"          is_antibiotic = antbtc_drug_flag,",
+						"          is_antipsychotic = antpsyct_drug_flag,",
+						"          source_file_name,",
+						"          etl_load_date_time",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> selectgeographybydrugstreamcols",
+						"geographybydrugselectcols derive(brand_name_standardized = upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))),",
+						"          generic_name_standardized = upper(trim(regexReplace(gnrc_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))),",
+						"          drug_category = iif(and(not(isNull(brnd_name)),brnd_name!=''), 'Brand', ",
+						"iif(and(not(isNull(gnrc_name)),gnrc_name!=''), 'Generic', 'Other')),",
+						"          drug_id = concat(upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))),\"|\",upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))))) ~> geographybydrugderivedcols",
+						"providerstreamderivedcolumns select(mapColumn(",
+						"          provider_id,",
+						"          provider_name_full,",
+						"          provider_type_standardized,",
+						"          city_standardized,",
+						"          state_code,",
+						"          state_name,",
+						"          provider_entity_type,",
+						"          is_high_volume_provider,",
+						"          effective_date,",
+						"          end_date,",
+						"          is_current,",
+						"          etl_load_date_time",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> selectproviderstreamcolumns",
+						"selectgeographybydrugstreamcols select(mapColumn(",
+						"          brnd_name,",
+						"          gnrc_name,",
+						"          tot_clms,",
+						"          tot_drug_cst",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> selectdrugandclaimcost",
+						"filtervalidclaimanddrugtotals aggregate(groupBy(brnd_name,",
+						"          gnrc_name),",
+						"     avg_cost_per_claim = sum(tot_drug_cst)/sum(tot_clms)) ~> calculateaveragecostperclaim",
+						"selectdrugandclaimcost filter(and(and(not(isNull(tot_clms)), not(isNull(tot_drug_cst))), tot_clms > 0)) ~> filtervalidclaimanddrugtotals",
+						"derivedColumnsforsilverdrugstandardization, calculateaveragecostperclaim join(geographybydrugselectcols@brnd_name == calculateaveragecostperclaim@brnd_name",
+						"     && geographybydrugselectcols@gnrc_name == calculateaveragecostperclaim@gnrc_name,",
+						"     joinType:'left',",
+						"     matchType:'exact',",
+						"     ignoreSpaces: false,",
+						"     broadcast: 'auto')~> joinedgeographydrugdataset",
+						"geographybydrugderivedcols derive(therapeutic_class = iif(locate(upper(generic_name_standardized), 'ATORVASTATIN') >= 0 || locate(upper(generic_name_standardized), 'SIMVASTATIN') >= 0 || locate(upper(generic_name_standardized), 'ROSUVASTATIN') >= 0, 'Cardiovascular - Statins',",
+						"iif(locate(upper(generic_name_standardized), 'LISINOPRIL') >= 0 || locate(upper(generic_name_standardized), 'LOSARTAN') >= 0 || locate(upper(generic_name_standardized), 'ENALAPRIL') >= 0, 'Cardiovascular - ACE/ARB', ",
+						"iif(locate(upper(generic_name_standardized), 'METFORMIN') >= 0 || locate(upper(generic_name_standardized), 'INSULIN') >= 0 || locate(upper(generic_name_standardized), 'GLIPIZIDE') >= 0, 'Endocrine - Diabetes',",
+						"iif(locate(upper(generic_name_standardized), 'AMOXICILLIN') >= 0 || locate(upper(generic_name_standardized), 'AZITHROMYCIN') >= 0 || locate(upper(generic_name_standardized), 'CIPROFLOXACIN') >= 0, 'Anti-Infective',",
+						"iif(locate(upper(generic_name_standardized), 'SERTRALINE') >= 0 || locate(upper(generic_name_standardized), 'FLUOXETINE') >= 0 || locate(upper(generic_name_standardized), 'ESCITALOPRAM') >= 0, 'Psychiatric - Antidepressants',",
+						"iif(locate(upper(generic_name_standardized), 'OMEPRAZOLE') >= 0 || locate(upper(generic_name_standardized), 'LANSOPRAZOLE') >= 0 || locate(upper(generic_name_standardized), 'PANTOPRAZOLE') >= 0, 'Gastrointestinal - PPI',",
+						"iif(locate(upper(generic_name_standardized), 'GABAPENTIN') >= 0 || locate(upper(generic_name_standardized), 'PREGABALIN') >= 0 || locate(upper(generic_name_standardized), 'LAMOTRIGINE') >= 0, 'Neurological',",
+						"iif(locate(upper(generic_name_standardized), 'OXYCODONE') >= 0 || locate(upper(generic_name_standardized), 'HYDROCODONE') >= 0 || locate(upper(generic_name_standardized), 'TRAMADOL') >= 0, 'Pain Management - Opioids',",
+						"iif(locate(upper(generic_name_standardized), 'IBUPROFEN') >= 0 || locate(upper(generic_name_standardized), 'NAPROXEN') >= 0 || locate(upper(generic_name_standardized), 'ACETAMINOPHEN') >= 0, 'Pain Management - Other',",
+						"'Other/Unclassified'))))))))),",
+						"          effective_date = currentTimestamp(),",
+						"          end_date = toTimestamp(null()),",
+						"          is_current = true(),",
+						"          etl_load_date_time = currentTimestamp(),",
+						"          is_controlled_substance = iif(opioid_drug_flag || opioid_la_drug_flag, true(), false())) ~> derivedColumnsforsilverdrugstandardization",
+						"joinedgeographydrugdataset select(mapColumn(",
+						"          drug_id,",
+						"          brand_name_standardized,",
+						"          generic_name_standardized,",
+						"          therapeutic_class,",
+						"          drug_category,",
+						"          is_controlled_substance,",
+						"          is_opioid = opioid_drug_flag,",
+						"          is_long_acting_opioid = opioid_la_drug_flag,",
+						"          is_antibiotic = antbtc_drug_flag,",
+						"          is_antipsychotic = antpsyct_drug_flag,",
+						"          avg_cost_per_claim,",
+						"          is_current,",
+						"          effective_date,",
+						"          end_date,",
+						"          etl_load_date_time",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> silverdrugstandardizedcolumns",
+						"geographybydrugstream select(mapColumn(",
+						"          prscrbr_geo_lvl,",
+						"          prscrbr_geo_cd,",
+						"          prscrbr_geo_desc,",
+						"          brnd_name,",
+						"          gnrc_name,",
+						"          tot_clms,",
+						"          tot_drug_cst,",
+						"          tot_benes,",
+						"          opioid_drug_flag,",
+						"          antbtc_drug_flag,",
+						"          antpsyct_drug_flag,",
+						"          opioid_la_drug_flag,",
+						"          source_file_name,",
+						"          etl_load_date_time",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> geographybydrugselectcols",
+						"geographybydrugstream derive(prescription_id = md5(concat('GEO', prscrbr_geo_cd, brnd_name, gnrc_name)),",
+						"          provider_id = toString(null()),",
+						"          drug_id = md5(concat(upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))), upper(trim(regexReplace(gnrc_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))))),",
+						"          total_claims = coalesce(tot_clms, 0),",
+						"          total_30day_fills = coalesce(tot_30day_fills,0),",
+						"          total_drug_cost = round(coalesce(tot_drug_cst, 0), 2),",
+						"          is_suppressed = iif(or(between(tot_clms , 1, 10),between(tot_benes, 1, 10)), true(), false())) ~> geographybydrugrawderivedcols",
+						"geographybydrugrawderivedcols derive(total_beneficiaries = iif(is_suppressed,toLong(null()),toLong(coalesce(tot_benes, 0))),",
+						"          claims_65_plus = iif(is_suppressed, toInteger(null()), coalesce(ge65_tot_clms,0)),",
+						"          cost_65_plus = iif(is_suppressed, toLong(null()), toLong(coalesce(ge65_tot_drug_cst,0))),",
+						"          beneficiaries_65_plus = iif(is_suppressed, toLong(null()), toLong(coalesce(ge65_tot_benes,0))),",
+						"          data_reporting_period = year(etl_load_date_time)) ~> geographybydrugrawderivedcolspart2",
+						"geographybydrugrawderivedcolspart2 select(mapColumn(",
+						"          prescription_id,",
+						"          provider_id,",
+						"          drug_id,",
+						"          geography_level = prscrbr_geo_lvl,",
+						"          state_code = prscrbr_geo_cd,",
+						"          total_claims,",
+						"          total_30day_fills,",
+						"          total_drug_cost,",
+						"          total_beneficiaries,",
+						"          claims_65_plus,",
+						"          cost_65_plus,",
+						"          beneficiaries_65_plus,",
+						"          is_suppressed,",
+						"          data_reporting_period",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> geographydrugrecordsflow",
+						"providerdrugrawsource derive(prscrbr_npi = toInteger(prscrbr_npi),",
+						"          prescription_id = md5(concat('GEO', prscrbr_npi, brnd_name, gnrc_name)),",
+						"          provider_id = prscrbr_npi,",
+						"          drug_id = md5(concat(upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))), upper(trim(regexReplace(gnrc_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))))),",
+						"          geography_level = 'Provider',",
+						"          total_claims = coalesce(tot_clms, 0),",
+						"          total_drug_cost = coalesce(tot_drug_cst, 0),",
+						"          total_30day_fills = coalesce(tot_30day_fills,0),",
+						"          is_suppressed = iif(or(between(tot_clms , 1, 10),between(tot_benes, 1, 10)), true(), false())) ~> providerdrugrawderivedcolspart1",
+						"providerdrugrawderivedcolspart1 derive(total_beneficiaries = iif(is_suppressed,toLong(null()),toLong(coalesce(tot_benes, 0))),",
+						"          claims_65_plus = iif(is_suppressed, toLong(null()), coalesce(ge65_tot_clms,0)),",
+						"          cost_65_plus = iif(is_suppressed, toLong(null()), toLong(coalesce(ge65_tot_drug_cst,0))),",
+						"          beneficiaries_65_plus = iif(is_suppressed, toLong(null()), toLong(coalesce(ge65_tot_benes,0))),",
+						"          data_reporting_period = year(etl_load_date_time)) ~> providerdrugrawderivedcolspart2",
+						"providerdrugrawderivedcolspart2 select(mapColumn(",
+						"          prescription_id,",
+						"          provider_id,",
+						"          drug_id,",
+						"          geography_level,",
+						"          state_code = prscrbr_state_abrvtn,",
+						"          total_claims,",
+						"          total_30day_fills,",
+						"          total_drug_cost,",
+						"          total_beneficiaries,",
+						"          claims_65_plus,",
+						"          cost_65_plus,",
+						"          beneficiaries_65_plus,",
+						"          is_suppressed,",
+						"          data_reporting_period",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> providerdrugrecordsflow",
+						"providerdrugrecordsflow, geographydrugrecordsflow union(byName: true)~> providerdrugunionprovidergeo",
+						"filternullgeolvlrecords aggregate(groupBy(prscrbr_geo_lvl,",
+						"          prscrbr_geo_cd,",
+						"          prscrbr_geo_desc),",
+						"     record_count = count(brnd_name)) ~> aggregatedgeoinfo",
+						"aggregatedgeoinfo derive(geography_id = iif(prscrbr_geo_lvl == 'National', 'NATIONAL', prscrbr_geo_cd),",
+						"          state_code = /* CASE WHEN prscrbr_geo_lvl = 'National' THEN 'US' ELSE LOOKUP_STATE_CODE_FROM_FIPS(prscrbr_geo_cd) END */",
+						"case(",
+						"    prscrbr_geo_lvl == 'National', 'US',",
+						"    prscrbr_geo_cd == '01', 'AL',",
+						"    prscrbr_geo_cd == '02', 'AK',",
+						"    prscrbr_geo_cd == '04', 'AZ',",
+						"    prscrbr_geo_cd == '05', 'AR',",
+						"    prscrbr_geo_cd == '06', 'CA',",
+						"    prscrbr_geo_cd == '08', 'CO',",
+						"    prscrbr_geo_cd == '09', 'CT',",
+						"    prscrbr_geo_cd == '10', 'DE',",
+						"    prscrbr_geo_cd == '11', 'DC',",
+						"    prscrbr_geo_cd == '12', 'FL',",
+						"    prscrbr_geo_cd == '13', 'GA',",
+						"    prscrbr_geo_cd == '15', 'HI',",
+						"    prscrbr_geo_cd == '16', 'ID',",
+						"    prscrbr_geo_cd == '17', 'IL',",
+						"    prscrbr_geo_cd == '18', 'IN',",
+						"    prscrbr_geo_cd == '19', 'IA',",
+						"    prscrbr_geo_cd == '20', 'KS',",
+						"    prscrbr_geo_cd == '21', 'KY',",
+						"    prscrbr_geo_cd == '22', 'LA',",
+						"    prscrbr_geo_cd == '23', 'ME',",
+						"    prscrbr_geo_cd == '24', 'MD',",
+						"    prscrbr_geo_cd == '25', 'MA',",
+						"    prscrbr_geo_cd == '26', 'MI',",
+						"    prscrbr_geo_cd == '27', 'MN',",
+						"    prscrbr_geo_cd == '28', 'MS',",
+						"    prscrbr_geo_cd == '29', 'MO',",
+						"    prscrbr_geo_cd == '30', 'MT',",
+						"    prscrbr_geo_cd == '31', 'NE',",
+						"    prscrbr_geo_cd == '32', 'NV',",
+						"    prscrbr_geo_cd == '33', 'NH',",
+						"    prscrbr_geo_cd == '34', 'NJ',",
+						"    prscrbr_geo_cd == '35', 'NM',",
+						"    prscrbr_geo_cd == '36', 'NY',",
+						"    prscrbr_geo_cd == '37', 'NC',",
+						"    prscrbr_geo_cd == '38', 'ND',",
+						"    prscrbr_geo_cd == '39', 'OH',",
+						"    prscrbr_geo_cd == '40', 'OK',",
+						"    prscrbr_geo_cd == '41', 'OR',",
+						"    prscrbr_geo_cd == '42', 'PA',",
+						"    prscrbr_geo_cd == '44', 'RI',",
+						"    prscrbr_geo_cd == '45', 'SC',",
+						"    prscrbr_geo_cd == '46', 'SD',",
+						"    prscrbr_geo_cd == '47', 'TN',",
+						"    prscrbr_geo_cd == '48', 'TX',",
+						"    prscrbr_geo_cd == '49', 'UT',",
+						"    prscrbr_geo_cd == '50', 'VT',",
+						"    prscrbr_geo_cd == '51', 'VA',",
+						"    prscrbr_geo_cd == '53', 'WA',",
+						"    prscrbr_geo_cd == '54', 'WV',",
+						"    prscrbr_geo_cd == '55', 'WI',",
+						"    prscrbr_geo_cd == '56', 'WY',",
+						"    prscrbr_geo_cd == '72', 'PR',",
+						"    prscrbr_geo_cd == '78', 'VI',",
+						"    toString(null())",
+						"),",
+						"          state_name = /* CASE WHEN prscrbr_geo_lvl = 'National' THEN 'United States' ELSE TRIM(prscrbr_geo_desc) END */",
+						"iif(prscrbr_geo_lvl == 'National', 'United States', trim(prscrbr_geo_desc)),",
+						"          fips_code = /* CASE WHEN prscrbr_geo_lvl = 'National' THEN 'US' ELSE prscrbr_geo_cd END */",
+						"iif(prscrbr_geo_lvl == 'National', 'US', prscrbr_geo_cd)) ~> derivedColumngeoinfo",
+						"geographybydrugstream filter(not(isNull(prscrbr_geo_lvl))) ~> filternullgeolvlrecords",
+						"derivedColumngeoinfo derive(census_region = case(",
+						"    state_code == 'US', 'National',",
+						"    in(['CT','ME','MA','NH','NJ','NY','PA','RI','VT'], state_code), 'Northeast',",
+						"    in(['IL','IN','IA','KS','MI','MN','MO','NE','ND','OH','SD','WI'], state_code), 'Midwest',",
+						"    in(['AL','AR','DE','DC','FL','GA','KY','LA','MD','MS','NC','OK','SC','TN','TX','VA','WV'], state_code), 'South',",
+						"    in(['AK','AZ','CA','CO','HI','ID','MT','NV','NM','OR','UT','WA','WY'], state_code), 'West',",
+						"    in(['PR','VI'], state_code), 'South',",
+						"    in(['GU','AS','MP'], state_code), 'West',",
+						"    in(['AA','AE','AP'], state_code), 'Armed Forces',",
+						"    in(['XX','ZZ'], state_code), 'Unknown',",
+						"    'Unknown'",
+						"),",
+						"          census_division = case(",
+						"    state_code == 'US', 'National',",
+						"    in(['CT','ME','MA','NH','RI','VT'], state_code), 'New England',",
+						"    in(['NJ','NY','PA'], state_code), 'Middle Atlantic', ",
+						"    in(['IL','IN','MI','OH','WI'], state_code), 'East North Central',",
+						"    in(['IA','KS','MN','MO','NE','ND','SD'], state_code), 'West North Central',",
+						"    in(['DE','DC','FL','GA','MD','NC','SC','VA','WV'], state_code), 'South Atlantic',",
+						"    in(['AL','KY','MS','TN'], state_code), 'East South Central',",
+						"    in(['AR','LA','OK','TX'], state_code), 'West South Central',",
+						"    in(['AZ','CO','ID','MT','NV','NM','UT','WY'], state_code), 'Mountain',",
+						"    in(['AK','CA','HI','OR','WA'], state_code), 'Pacific',",
+						"    in(['PR','VI'], state_code), 'Caribbean',",
+						"    in(['GU','AS','MP'], state_code), 'Pacific Islands',",
+						"    in(['AA','AE','AP'], state_code), 'Armed Forces',",
+						"    in(['XX','ZZ'], state_code), 'Unknown',",
+						"    'Unknown'",
+						"),",
+						"          etl_load_date_time = currentTimestamp(),",
+						"          effective_date = currentTimestamp(),",
+						"          end_date = toTimestamp(null()),",
+						"          is_current = true()) ~> derivedColumngeoinfopart2",
+						"derivedColumngeoinfopart2 select(mapColumn(",
+						"          geography_id,",
+						"          state_code,",
+						"          state_name,",
+						"          fips_code,",
+						"          census_region,",
+						"          census_division,",
+						"          etl_load_date_time,",
+						"          is_current,",
+						"          effective_date,",
+						"          end_date",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> geoinfoselectcols",
+						"providerdrugunionprovidergeo derive(etl_load_date_time = currentTimestamp(),",
+						"          effective_date = currentTimestamp(),",
+						"          end_date = toTimestamp(null()),",
+						"          is_current = true()) ~> silverprescriptionsvalidatedsteram",
+						"selectproviderstreamcolumns sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'silver',",
+						"     folderPath: 'silver_providers_cleaned',",
+						"     overwrite: true,",
+						"     mergeSchema: false,",
+						"     autoCompact: false,",
+						"     optimizedWrite: false,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: true,",
+						"     updateable: false,",
+						"     upsertable: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> silverproviderscleanedsink",
+						"silverdrugstandardizedcolumns sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'silver',",
+						"     folderPath: 'silver_drugs_standardized',",
+						"     overwrite: true,",
+						"     mergeSchema: false,",
+						"     autoCompact: false,",
+						"     optimizedWrite: false,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: true,",
+						"     updateable: false,",
+						"     upsertable: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> silverdrugsstandardizedsink",
+						"silverprescriptionsvalidatedsteram sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'silver',",
+						"     folderPath: 'silver_prescriptions_validated',",
+						"     mergeSchema: false,",
+						"     autoCompact: false,",
+						"     optimizedWrite: false,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: true,",
+						"     updateable: false,",
+						"     upsertable: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> silverprescriptionsvalidatedsink",
+						"geoinfoselectcols sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'delta',",
+						"     fileSystem: 'silver',",
+						"     folderPath: 'silver_geography_reference',",
+						"     overwrite: true,",
+						"     mergeSchema: false,",
+						"     autoCompact: false,",
+						"     optimizedWrite: false,",
+						"     vacuum: 0,",
+						"     deletable: false,",
+						"     insertable: true,",
+						"     updateable: false,",
+						"     upsertable: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> silvergeographyreferencesink"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_gen2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_medicare_ingest_and_transform')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Iterate through source folders",
+						"type": "ForEach",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@pipeline().parameters.source_to_staging_copy_config",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "copy_data_from_source_to_staging",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "DelimitedTextSource",
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": true,
+												"wildcardFolderPath": {
+													"value": "@item().directoryname",
+													"type": "Expression"
+												},
+												"wildcardFileName": {
+													"value": "*",
+													"type": "Expression"
+												},
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "DelimitedTextReadSettings"
+											}
+										},
+										"sink": {
+											"type": "DelimitedTextSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "DelimitedTextWriteSettings",
+												"quoteAllText": true,
+												"fileExtension": ".csv"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "ds_source_csv_format",
+											"type": "DatasetReference",
+											"parameters": {
+												"directoryname": {
+													"value": "@item().directoryname",
+													"type": "Expression"
+												},
+												"compression": {
+													"value": "@item().compressiontype",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "ds_target_csv_format",
+											"type": "DatasetReference",
+											"parameters": {
+												"directoryname": "@item().directoryname"
+											}
+										}
+									]
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"source_to_staging_copy_config": {
+						"type": "array"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_source_csv_format')]",
+				"[concat(variables('factoryId'), '/datasets/ds_target_csv_format')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_temp_pipeline')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "bronze_ingestion_dataflow",
+						"type": "ExecuteDataFlow",
+						"state": "Inactive",
+						"onInactiveMarkAs": "Succeeded",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "bronze_ingestion_dataflow",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"providerstream": {},
+									"geographydrugstream": {},
+									"providerdrugstream": {},
+									"providerbronzesink": {},
+									"geographydrugbronzesink": {},
+									"providerdrugbronzesink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					},
+					{
+						"name": "silver_ingestion_dataflow",
+						"type": "ExecuteDataFlow",
+						"state": "Inactive",
+						"onInactiveMarkAs": "Succeeded",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "silver_ingestion_dataflow",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"providerstream": {},
+									"geographybydrugstream": {},
+									"providerdrugrawsource": {},
+									"silverproviderscleanedsink": {},
+									"silverdrugsstandardizedsink": {},
+									"silverprescriptionsvalidatedsink": {},
+									"silvergeographyreferencesink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					},
+					{
+						"name": "gold_ingestion_dataflow",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "gold_ingestion_dataflow",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"silverprovidersource": {},
+									"geographysilverzonerecords": {},
+									"silverdrugsstandardized": {},
+									"silverprescriptionsvalidated": {},
+									"dimproviderssink": {},
+									"dimdrugsink": {},
+									"dimtherapeuticssink": {},
+									"dimgeographysink": {},
+									"factprescriptionssink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/bronze_ingestion_dataflow')]",
+				"[concat(variables('factoryId'), '/dataflows/silver_ingestion_dataflow')]",
+				"[concat(variables('factoryId'), '/dataflows/gold_ingestion_dataflow')]"
+			]
+		}
+	]
+}
