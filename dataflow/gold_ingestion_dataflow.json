@@ -24,6 +24,13 @@
 						"type": "LinkedServiceReference"
 					},
 					"name": "silverdrugsstandardized"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
+					"name": "silverprescriptionsvalidated"
 				}
 			],
 			"sinks": [
@@ -46,6 +53,13 @@
 						"referenceName": "ls_adls_gen2",
 						"type": "LinkedServiceReference"
 					},
+					"name": "dimtherapeuticssink"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_adls_gen2",
+						"type": "LinkedServiceReference"
+					},
 					"name": "dimgeographysink"
 				},
 				{
@@ -53,7 +67,7 @@
 						"referenceName": "ls_adls_gen2",
 						"type": "LinkedServiceReference"
 					},
-					"name": "dimtherapeuticssink"
+					"name": "factprescriptionssink"
 				}
 			],
 			"transformations": [
@@ -76,9 +90,6 @@
 					"name": "surrogateKeydimdrug"
 				},
 				{
-					"name": "surrogateKeydimprovider"
-				},
-				{
 					"name": "geographysilverselectcols"
 				},
 				{
@@ -97,7 +108,31 @@
 					"name": "derivedColumndimtherapeutics"
 				},
 				{
-					"name": "select1"
+					"name": "dimprovidersurrogateKey"
+				},
+				{
+					"name": "dimterapeuticssurrogateKey"
+				},
+				{
+					"name": "prescriptionjoinedproviders"
+				},
+				{
+					"name": "prescriptionjoineddrug"
+				},
+				{
+					"name": "silverprescriptionsvalidatedderivedColumn"
+				},
+				{
+					"name": "filtersilverprescriptionsvalidatedrows"
+				},
+				{
+					"name": "silverprescriptionsjoinedgeography"
+				},
+				{
+					"name": "silverprescriptionsjoindimtherapeutics"
+				},
+				{
+					"name": "factprescriptionsselectcols"
 				}
 			],
 			"scriptLines": [
@@ -162,6 +197,32 @@
 				"     format: 'delta',",
 				"     fileSystem: 'silver',",
 				"     folderPath: 'silver_drugs_standardized') ~> silverdrugsstandardized",
+				"source(output(",
+				"          prescription_id as string,",
+				"          provider_id as string,",
+				"          drug_id as string,",
+				"          geography_level as string,",
+				"          state_code as string,",
+				"          total_claims as long,",
+				"          total_30day_fills as double,",
+				"          total_drug_cost as decimal(10,0),",
+				"          total_beneficiaries as long,",
+				"          claims_65_plus as long,",
+				"          cost_65_plus as long,",
+				"          beneficiaries_65_plus as long,",
+				"          is_suppressed as boolean,",
+				"          data_reporting_period as integer,",
+				"          etl_load_date_time as timestamp,",
+				"          effective_date as timestamp,",
+				"          end_date as timestamp,",
+				"          is_current as boolean",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'silver',",
+				"     folderPath: 'silver_prescriptions_validated') ~> silverprescriptionsvalidated",
 				"silverprovidersource filter(equals(is_current,true())) ~> filteractiverecords",
 				"filteractiverecords select(mapColumn(",
 				"          provider_id,",
@@ -180,7 +241,7 @@
 				"     matchType:'exact',",
 				"     ignoreSpaces: false,",
 				"     broadcast: 'auto')~> providerjoinedgeography",
-				"select1 select(mapColumn(",
+				"providerjoinedgeography select(mapColumn(",
 				"          provider_id,",
 				"          provider_name,",
 				"          provider_specialty,",
@@ -189,8 +250,8 @@
 				"          city,",
 				"          state_code = selectsilverproviderrecords@state_code,",
 				"          state_name = selectsilverproviderrecords@state_name,",
-				"          region,",
-				"          division",
+				"          region = census_region,",
+				"          division = census_division",
 				"     ),",
 				"     skipDuplicateMapInputs: true,",
 				"     skipDuplicateMapOutputs: true) ~> finaldimproviderrecords",
@@ -212,9 +273,6 @@
 				"selectsilverdrugsstandardized keyGenerate(output(drug_key as long),",
 				"     startAt: 1L,",
 				"     stepValue: 1L) ~> surrogateKeydimdrug",
-				"providerjoinedgeography keyGenerate(output(provider_key as long),",
-				"     startAt: 1L,",
-				"     stepValue: 1L) ~> surrogateKeydimprovider",
 				"geographysilverzonerecords select(mapColumn(",
 				"          state_code,",
 				"          state_name,",
@@ -259,32 +317,61 @@
 				"    or(like(therapeutic_class, '%Cardiovascular%'), like(therapeutic_class, '%Endocrine%')),'Elderly',",
 				"    like(therapeutic_class, '%Psychiatric%'),'Adult',",
 				"    'All Ages'",
-				")",
-				",",
+				"),",
 				"          regulatory_risk_level = case(opioid_count > 0, 'High',",
 				"controlled_count > 0, 'Medium',",
 				"'Low')) ~> derivedColumndimtherapeutics",
-				"surrogateKeydimprovider select(mapColumn(",
-				"          provider_id,",
-				"          provider_name,",
-				"          provider_specialty,",
-				"          provider_entity_type,",
-				"          is_high_volume_provider,",
-				"          city,",
-				"          state_code = geographysilverzonerecords@state_code,",
-				"          state_name = geographysilverzonerecords@state_name,",
-				"          fips_code,",
-				"          region = census_region,",
-				"          division = census_division,",
-				"          provider_key",
+				"finaldimproviderrecords keyGenerate(output(provider_key as long),",
+				"     startAt: 1L,",
+				"     stepValue: 1L) ~> dimprovidersurrogateKey",
+				"derivedColumndimtherapeutics keyGenerate(output(therapeutic_area_key as long),",
+				"     startAt: 1L,",
+				"     stepValue: 1L) ~> dimterapeuticssurrogateKey",
+				"filtersilverprescriptionsvalidatedrows, dimprovidersurrogateKey join(toInteger(silverprescriptionsvalidated@provider_id) == finaldimproviderrecords@provider_id,",
+				"     joinType:'inner',",
+				"     matchType:'exact',",
+				"     ignoreSpaces: false,",
+				"     broadcast: 'auto')~> prescriptionjoinedproviders",
+				"prescriptionjoinedproviders, surrogateKeydimdrug join(silverprescriptionsvalidated@drug_id == selectsilverdrugsstandardized@drug_id,",
+				"     joinType:'inner',",
+				"     matchType:'exact',",
+				"     ignoreSpaces: false,",
+				"     broadcast: 'auto')~> prescriptionjoineddrug",
+				"silverprescriptionsvalidated derive(data_quality_flag = case(is_suppressed, 'SUPPRESSED', isNull(total_claims),'MISSING','CLEAN'),",
+				"          last_updated = currentTimestamp()) ~> silverprescriptionsvalidatedderivedColumn",
+				"silverprescriptionsvalidatedderivedColumn filter(and(is_suppressed==false(), not(isNull(total_claims)))) ~> filtersilverprescriptionsvalidatedrows",
+				"prescriptionjoineddrug, dimgeographyderivedcols join(silverprescriptionsvalidated@state_code == geographysilverselectcols@state_code,",
+				"     joinType:'inner',",
+				"     matchType:'exact',",
+				"     ignoreSpaces: false,",
+				"     broadcast: 'auto')~> silverprescriptionsjoinedgeography",
+				"silverprescriptionsjoinedgeography, dimtherapeuticssurrogateKey join(selectsilverdrugsstandardized@therapeutic_class == therapeuticstatsaggregate@therapeutic_class,",
+				"     joinType:'left',",
+				"     matchType:'exact',",
+				"     ignoreSpaces: false,",
+				"     broadcast: 'auto')~> silverprescriptionsjoindimtherapeutics",
+				"silverprescriptionsjoindimtherapeutics select(mapColumn(",
+				"          provider_key,",
+				"          drug_key,",
+				"          geography_key,",
+				"          therapeutic_area_key,",
+				"          total_claims,",
+				"          total_beneficiaries,",
+				"          total_cost = total_drug_cost,",
+				"          total_30day_fills,",
+				"          elderly_claims = claims_65_plus,",
+				"          elderly_beneficiaries = beneficiaries_65_plus,",
+				"          elderly_cost = cost_65_plus,",
+				"          data_quality_flag,",
+				"          last_updated",
 				"     ),",
 				"     skipDuplicateMapInputs: true,",
-				"     skipDuplicateMapOutputs: true) ~> select1",
-				"finaldimproviderrecords sink(allowSchemaDrift: true,",
+				"     skipDuplicateMapOutputs: true) ~> factprescriptionsselectcols",
+				"dimprovidersurrogateKey sink(allowSchemaDrift: true,",
 				"     validateSchema: false,",
 				"     format: 'delta',",
 				"     fileSystem: 'gold',",
-				"     folderPath: 'gold_drug_market_analysis',",
+				"     folderPath: 'dim_providers',",
 				"     overwrite: true,",
 				"     mergeSchema: false,",
 				"     autoCompact: false,",
@@ -303,26 +390,7 @@
 				"     validateSchema: false,",
 				"     format: 'delta',",
 				"     fileSystem: 'gold',",
-				"     folderPath: 'gold_provider_performance_metrics',",
-				"     overwrite: true,",
-				"     mergeSchema: false,",
-				"     autoCompact: false,",
-				"     optimizedWrite: false,",
-				"     vacuum: 0,",
-				"     deletable: false,",
-				"     insertable: true,",
-				"     updateable: false,",
-				"     upsertable: false,",
-				"     umask: 0022,",
-				"     preCommands: [],",
-				"     postCommands: [],",
-				"     skipDuplicateMapInputs: true,",
-				"     skipDuplicateMapOutputs: true) ~> dimdrugsink",
-				"dimgeographyderivedcols sink(allowSchemaDrift: true,",
-				"     validateSchema: false,",
-				"     format: 'delta',",
-				"     fileSystem: 'gold',",
-				"     folderPath: 'gold_market_geography_insights',",
+				"     folderPath: 'dim_drugs',",
 				"     overwrite: true,",
 				"     mergeSchema: false,",
 				"     autoCompact: false,",
@@ -337,12 +405,25 @@
 				"     postCommands: [],",
 				"     skipDuplicateMapInputs: true,",
 				"     skipDuplicateMapOutputs: true,",
-				"     saveOrder: 1) ~> dimgeographysink",
-				"derivedColumndimtherapeutics sink(allowSchemaDrift: true,",
+				"     mapColumn(",
+				"          drug_id,",
+				"          brand_name,",
+				"          generic_name,",
+				"          therapeutic_class,",
+				"          drug_category,",
+				"          is_controlled_substance,",
+				"          is_opioid,",
+				"          is_long_acting_opioid,",
+				"          is_antibiotic,",
+				"          is_antipsychotic,",
+				"          avg_cost_per_claim,",
+				"          drug_key",
+				"     )) ~> dimdrugsink",
+				"dimterapeuticssurrogateKey sink(allowSchemaDrift: true,",
 				"     validateSchema: false,",
 				"     format: 'delta',",
 				"     fileSystem: 'gold',",
-				"     folderPath: 'gold_provider_performance_metrics',",
+				"     folderPath: 'dim_therapeutic_areas',",
 				"     overwrite: true,",
 				"     mergeSchema: false,",
 				"     autoCompact: false,",
@@ -356,7 +437,45 @@
 				"     preCommands: [],",
 				"     postCommands: [],",
 				"     skipDuplicateMapInputs: true,",
-				"     skipDuplicateMapOutputs: true) ~> dimtherapeuticssink"
+				"     skipDuplicateMapOutputs: true) ~> dimtherapeuticssink",
+				"dimgeographyderivedcols sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'gold',",
+				"     folderPath: 'dim_geography',",
+				"     overwrite: true,",
+				"     mergeSchema: false,",
+				"     autoCompact: false,",
+				"     optimizedWrite: false,",
+				"     vacuum: 0,",
+				"     deletable: false,",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     upsertable: false,",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> dimgeographysink",
+				"factprescriptionsselectcols sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'delta',",
+				"     fileSystem: 'gold',",
+				"     folderPath: 'fact_prescriptions',",
+				"     overwrite: true,",
+				"     mergeSchema: false,",
+				"     autoCompact: false,",
+				"     optimizedWrite: false,",
+				"     vacuum: 0,",
+				"     deletable: false,",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     upsertable: false,",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> factprescriptionssink"
 			]
 		}
 	}
