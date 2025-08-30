@@ -227,3 +227,10 @@ resource "azurerm_key_vault_secret" "storage_connection_access_key" {
   key_vault_id = azurerm_key_vault.main.id
   depends_on = [azurerm_key_vault_access_policy.adf_policy]
 }
+
+# Assign Storage Account Contributor role to current user
+resource "azurerm_role_assignment" "storage_account_contributor" {
+  scope                = azurerm_storage_account.adls_gen2.id
+  role_definition_name = "Storage Account Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
