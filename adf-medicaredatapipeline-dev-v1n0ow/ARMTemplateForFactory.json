@@ -889,6 +889,42 @@
 						},
 						{
 							"name": "factprescriptionsselectcols"
+						},
+						{
+							"name": "defaulandactualdimprovider"
+						},
+						{
+							"name": "dimproviderdefaultrowfilter"
+						},
+						{
+							"name": "dimproviderderivedcolumns"
+						},
+						{
+							"name": "dimdrugdefaultrowfilter"
+						},
+						{
+							"name": "dimdrugdefaultrow"
+						},
+						{
+							"name": "defaultandactualdimdrug"
+						},
+						{
+							"name": "dimgeodefaultrowfilter"
+						},
+						{
+							"name": "dimgeodefaultrow"
+						},
+						{
+							"name": "defaultandactualdimgeo"
+						},
+						{
+							"name": "dimtherapeuticareasdefaultrowfilter"
+						},
+						{
+							"name": "dimtherapeuticareasdefaultrow"
+						},
+						{
+							"name": "defaultandactualdimtherapeutics"
 						}
 					],
 					"scriptLines": [
@@ -1084,7 +1120,7 @@
 						"     startAt: 1L,",
 						"     stepValue: 1L) ~> dimterapeuticssurrogateKey",
 						"filtersilverprescriptionsvalidatedrows, dimprovidersurrogateKey join(toInteger(silverprescriptionsvalidated@provider_id) == finaldimproviderrecords@provider_id,",
-						"     joinType:'inner',",
+						"     joinType:'left',",
 						"     matchType:'exact',",
 						"     ignoreSpaces: false,",
 						"     broadcast: 'auto')~> prescriptionjoinedproviders",
@@ -1123,7 +1159,53 @@
 						"     ),",
 						"     skipDuplicateMapInputs: true,",
 						"     skipDuplicateMapOutputs: true) ~> factprescriptionsselectcols",
-						"dimprovidersurrogateKey sink(allowSchemaDrift: true,",
+						"dimprovidersurrogateKey, dimproviderderivedcolumns union(byName: true)~> defaulandactualdimprovider",
+						"dimprovidersurrogateKey filter(provider_key==1) ~> dimproviderdefaultrowfilter",
+						"dimproviderdefaultrowfilter derive(provider_key = -1,",
+						"          provider_id = -1,",
+						"          provider_name = \"UNKNOWN\",",
+						"          provider_specialty = \"UNKNOWN\",",
+						"          provider_entity_type = \"UNKNOWN\",",
+						"          is_high_volume_provider = false(),",
+						"          city = \"UNKNOWN\",",
+						"          state_code = \"UNKNOWN\",",
+						"          state_name = \"UNKNOWN\",",
+						"          region = \"UNKNOWN\",",
+						"          division = \"UNKNOWN\") ~> dimproviderderivedcolumns",
+						"surrogateKeydimdrug filter(drug_key==1) ~> dimdrugdefaultrowfilter",
+						"dimdrugdefaultrowfilter derive(drug_key = -1,",
+						"          drug_id = \"UNKNOWN\",",
+						"          brand_name = \"UNKNOWN\",",
+						"          generic_name = \"UNKNOWN\",",
+						"          therapeutic_class = \"UNKNOWN\",",
+						"          drug_category = \"UNKNOWN\",",
+						"          is_controlled_substance = false(),",
+						"          is_opioid = false(),",
+						"          is_long_acting_opioid = false(),",
+						"          is_antibiotic = false(),",
+						"          is_antipsychotic = false(),",
+						"          avg_cost_per_claim = 0.00) ~> dimdrugdefaultrow",
+						"surrogateKeydimdrug, dimdrugdefaultrow union(byName: true)~> defaultandactualdimdrug",
+						"dimgeographyderivedcols filter(geography_key==1) ~> dimgeodefaultrowfilter",
+						"dimgeodefaultrowfilter derive(geography_key = -1,",
+						"          state_code = \"UNKNOWN\",",
+						"          state_name = \"UNKNOWN\",",
+						"          fips_code = \"UNKNOWN\",",
+						"          census_region = \"UNKNOWN\",",
+						"          census_division = \"UNKNOWN\",",
+						"          is_territory = false(),",
+						"          region_sort_order = -1) ~> dimgeodefaultrow",
+						"dimgeographyderivedcols, dimgeodefaultrow union(byName: true)~> defaultandactualdimgeo",
+						"dimterapeuticssurrogateKey filter(therapeutic_area_key==1) ~> dimtherapeuticareasdefaultrowfilter",
+						"dimtherapeuticareasdefaultrowfilter derive(therapeutic_area_key = -1,",
+						"          therapeutic_class = \"UNKNOWN\",",
+						"          therapeutic_category = \"UNKNOWN\",",
+						"          is_chronic_condition = false(),",
+						"          is_high_cost_area = false(),",
+						"          primary_patient_age_group = \"UNKNOWN\",",
+						"          regulatory_risk_level = \"UNKNOWN\") ~> dimtherapeuticareasdefaultrow",
+						"dimterapeuticssurrogateKey, dimtherapeuticareasdefaultrow union(byName: true)~> defaultandactualdimtherapeutics",
+						"defaulandactualdimprovider sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     format: 'delta',",
 						"     fileSystem: 'gold',",
@@ -1142,7 +1224,7 @@
 						"     postCommands: [],",
 						"     skipDuplicateMapInputs: true,",
 						"     skipDuplicateMapOutputs: true) ~> dimproviderssink",
-						"surrogateKeydimdrug sink(allowSchemaDrift: true,",
+						"defaultandactualdimdrug sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     format: 'delta',",
 						"     fileSystem: 'gold',",
@@ -1175,7 +1257,7 @@
 						"          avg_cost_per_claim,",
 						"          drug_key",
 						"     )) ~> dimdrugsink",
-						"dimterapeuticssurrogateKey sink(allowSchemaDrift: true,",
+						"defaultandactualdimtherapeutics sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     format: 'delta',",
 						"     fileSystem: 'gold',",
@@ -1194,7 +1276,7 @@
 						"     postCommands: [],",
 						"     skipDuplicateMapInputs: true,",
 						"     skipDuplicateMapOutputs: true) ~> dimtherapeuticssink",
-						"dimgeographyderivedcols sink(allowSchemaDrift: true,",
+						"defaultandactualdimgeo sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     format: 'delta',",
 						"     fileSystem: 'gold',",
