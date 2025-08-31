@@ -948,7 +948,10 @@
 						"          is_chronic_condition = false(),",
 						"          is_high_cost_area = false(),",
 						"          primary_patient_age_group = \"UNKNOWN\",",
-						"          regulatory_risk_level = \"UNKNOWN\") ~> dimtherapeuticareasdefaultrow",
+						"          regulatory_risk_level = \"UNKNOWN\",",
+						"          avg_cost = 0.00,",
+						"          opioid_count = 0,",
+						"          controlled_count = 0) ~> dimtherapeuticareasdefaultrow",
 						"dimterapeuticssurrogateKey, dimtherapeuticareasdefaultrow union(byName: true)~> defaultandactualdimtherapeutics",
 						"defaulandactualdimprovider sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
@@ -1135,7 +1138,7 @@
 							"name": "providerstreamderivedcolumns"
 						},
 						{
-							"name": "renameproviderstreamcolumns"
+							"name": "selectandrenameproviderstreamcolumns"
 						},
 						{
 							"name": "selectgeographybydrugstreamcols"
@@ -1205,6 +1208,12 @@
 						},
 						{
 							"name": "silverprescriptionsvalidatedsteram"
+						},
+						{
+							"name": "aggregatestreamderivedcolumns"
+						},
+						{
+							"name": "addmetadataderivedColumns"
 						}
 					],
 					"scriptLines": [
@@ -1367,7 +1376,7 @@
 						"     format: 'delta',",
 						"     fileSystem: 'raw',",
 						"     folderPath: 'provider_and_drug') ~> providerdrugrawsource",
-						"renameproviderstreamcolumns derive(provider_name_full = case(",
+						"selectandrenameproviderstreamcolumns derive(provider_name_full = case(",
 						"isNull(prscrbr_first_name),",
 						"trim(prscrbr_last_org_name),",
 						"trim(prscrbr_first_name + ' '+ prscrbr_last_org_name)",
@@ -1451,11 +1460,7 @@
 						"    state_code == 'XX', 'Unknown',",
 						"    state_code == 'ZZ', 'Foreign Country',",
 						"    coalesce(state_code, 'Unknown')",
-						"),",
-						"          effective_date = currentTimestamp(),",
-						"          end_date = toTimestamp(null()),",
-						"          is_current = true(),",
-						"          etl_load_date_time = currentTimestamp()) ~> providerstreamderivedcolumns",
+						")) ~> providerstreamderivedcolumns",
 						"providerstream select(mapColumn(",
 						"          provider_id = prscrbr_npi,",
 						"          prscrbr_last_org_name,",
@@ -1466,11 +1471,10 @@
 						"          tot_clms,",
 						"          tot_drug_cst,",
 						"          tot_benes,",
-						"          opioid_tot_clms,",
-						"          etl_load_date_time",
+						"          opioid_tot_clms",
 						"     ),",
 						"     skipDuplicateMapInputs: true,",
-						"     skipDuplicateMapOutputs: true) ~> renameproviderstreamcolumns",
+						"     skipDuplicateMapOutputs: true) ~> selectandrenameproviderstreamcolumns",
 						"geographybydrugstream select(mapColumn(",
 						"          prscrbr_geo_lvl,",
 						"          prscrbr_geo_cd,",
@@ -1493,7 +1497,7 @@
 						"          drug_category = iif(and(not(isNull(brnd_name)),brnd_name!=''), 'Brand', ",
 						"iif(and(not(isNull(gnrc_name)),gnrc_name!=''), 'Generic', 'Other')),",
 						"          drug_id = concat(upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))),\"|\",upper(trim(regexReplace(gnrc_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))))) ~> geographybydrugderivedcols",
-						"providerstreamderivedcolumns select(mapColumn(",
+						"addmetadataderivedColumns select(mapColumn(",
 						"          provider_id,",
 						"          provider_name_full,",
 						"          provider_type_standardized,",
@@ -1789,6 +1793,19 @@
 						"          effective_date = currentTimestamp(),",
 						"          end_date = toTimestamp(null()),",
 						"          is_current = true()) ~> silverprescriptionsvalidatedsteram",
+						"providerstreamderivedcolumns aggregate(groupBy(provider_id,",
+						"          provider_name_full,",
+						"          provider_type_standardized,",
+						"          city_standardized,",
+						"          state_code,",
+						"          state_name,",
+						"          provider_entity_type,",
+						"          is_high_volume_provider),",
+						"     record_count = count(provider_id)) ~> aggregatestreamderivedcolumns",
+						"aggregatestreamderivedcolumns derive(effective_date = currentTimestamp(),",
+						"          end_date = toTimestamp(null()),",
+						"          is_current = true(),",
+						"          etl_load_date_time = currentTimestamp()) ~> addmetadataderivedColumns",
 						"selectproviderstreamcolumns sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     format: 'delta',",
