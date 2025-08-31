@@ -450,9 +450,6 @@
 							"name": "selectprovider"
 						},
 						{
-							"name": "upsertconditionforproviderstream"
-						},
-						{
 							"name": "changedatatypesforproviderstream"
 						},
 						{
@@ -468,9 +465,6 @@
 							"name": "geographydrugderivedmetadatacolumn"
 						},
 						{
-							"name": "upsertconditionforgeographydrugstream"
-						},
-						{
 							"name": "selectdrugstreamcolumns"
 						},
 						{
@@ -478,9 +472,6 @@
 						},
 						{
 							"name": "providerdrugstreamderivedcolumn"
-						},
-						{
-							"name": "upsertconditionforproviderdrugstream"
 						}
 					],
 					"scriptLines": [
@@ -661,7 +652,6 @@
 						"     ),",
 						"     skipDuplicateMapInputs: true,",
 						"     skipDuplicateMapOutputs: true) ~> selectprovider",
-						"providerstreamderivedmetadatacolumn alterRow(upsertIf(1==1)) ~> upsertconditionforproviderstream",
 						"selectprovider cast(output(",
 						"          prscrbr_npi as integer",
 						"     ),",
@@ -678,7 +668,6 @@
 						"     ),",
 						"     errors: true) ~> geographydrugstreamdatatypecasting",
 						"geographydrugstreamdatatypecasting derive(etl_load_date_time = currentTimestamp()) ~> geographydrugderivedmetadatacolumn",
-						"geographydrugderivedmetadatacolumn alterRow(upsertIf(1==1)) ~> upsertconditionforgeographydrugstream",
 						"providerdrugstream select(mapColumn(",
 						"          each(match(/* All input columns */true()),",
 						"               /* All input columns */lower($$) = $$)",
@@ -694,58 +683,60 @@
 						"     ),",
 						"     errors: true) ~> providerdrugstreamdatatypecasting",
 						"providerdrugstreamdatatypecasting derive(etl_load_date_time = currentTimestamp()) ~> providerdrugstreamderivedcolumn",
-						"providerdrugstreamderivedcolumn alterRow(updateIf(1==1)) ~> upsertconditionforproviderdrugstream",
-						"upsertconditionforproviderstream sink(allowSchemaDrift: true,",
+						"providerstreamderivedmetadatacolumn sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     format: 'delta',",
 						"     fileSystem: 'raw',",
 						"     folderPath: 'prescriber_by_provider',",
+						"     overwrite: true,",
 						"     mergeSchema: true,",
 						"     autoCompact: true,",
 						"     optimizedWrite: true,",
 						"     vacuum: 0,",
 						"     deletable: false,",
-						"     insertable: false,",
+						"     insertable: true,",
 						"     updateable: false,",
-						"     upsertable: true,",
+						"     upsertable: false,",
 						"     keys:['prscrbr_npi'],",
 						"     umask: 0022,",
 						"     preCommands: [],",
 						"     postCommands: [],",
 						"     skipDuplicateMapInputs: true,",
 						"     skipDuplicateMapOutputs: true) ~> providerbronzesink",
-						"upsertconditionforgeographydrugstream sink(allowSchemaDrift: true,",
+						"geographydrugderivedmetadatacolumn sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     format: 'delta',",
 						"     fileSystem: 'raw',",
 						"     folderPath: 'geography_and_drug',",
+						"     overwrite: true,",
 						"     mergeSchema: true,",
 						"     autoCompact: true,",
 						"     optimizedWrite: true,",
 						"     vacuum: 0,",
 						"     deletable: false,",
-						"     insertable: false,",
+						"     insertable: true,",
 						"     updateable: false,",
-						"     upsertable: true,",
+						"     upsertable: false,",
 						"     keys:['brnd_name','gnrc_name','prscrbr_geo_cd'],",
 						"     umask: 0022,",
 						"     preCommands: [],",
 						"     postCommands: [],",
 						"     skipDuplicateMapInputs: true,",
 						"     skipDuplicateMapOutputs: true) ~> geographydrugbronzesink",
-						"upsertconditionforproviderdrugstream sink(allowSchemaDrift: true,",
+						"providerdrugstreamderivedcolumn sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     format: 'delta',",
 						"     fileSystem: 'raw',",
 						"     folderPath: 'provider_and_drug',",
+						"     overwrite: true,",
 						"     mergeSchema: false,",
 						"     autoCompact: true,",
 						"     optimizedWrite: true,",
 						"     vacuum: 0,",
 						"     deletable: false,",
-						"     insertable: false,",
+						"     insertable: true,",
 						"     updateable: false,",
-						"     upsertable: true,",
+						"     upsertable: false,",
 						"     keys:['prscrbr_npi','brnd_name','gnrc_name'],",
 						"     umask: 0022,",
 						"     preCommands: [],",
