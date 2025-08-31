@@ -533,7 +533,7 @@
 				"     skipDuplicateMapOutputs: true) ~> geographydrugrecordsflow",
 				"providerdrugrawsource derive(prescription_id = md5(concat('PROV', coalesce(prscrbr_npi,\"~\"), coalesce(brnd_name,\"~\"), coalesce(gnrc_name,\"~\"))),",
 				"          provider_id = prscrbr_npi,",
-				"          drug_id = md5(concat(upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))), upper(trim(regexReplace(gnrc_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))))),",
+				"          drug_id = concat(upper(trim(regexReplace(brnd_name, \"[^A-Za-z0-9\\\\s/-]\", \"\"))), upper(trim(regexReplace(gnrc_name, \"[^A-Za-z0-9\\\\s/-]\", \"\")))),",
 				"          geography_level = 'Provider',",
 				"          total_claims = coalesce(tot_clms, 0),",
 				"          total_drug_cost = coalesce(tot_drug_cst, 0),",
