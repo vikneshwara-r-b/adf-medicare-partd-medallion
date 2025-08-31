@@ -5,8 +5,6 @@
 			{
 				"name": "bronze_ingestion_dataflow",
 				"type": "ExecuteDataFlow",
-				"state": "Inactive",
-				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [],
 				"policy": {
 					"timeout": "0.12:00:00",
@@ -62,8 +60,6 @@
 			{
 				"name": "gold_ingestion_dataflow",
 				"type": "ExecuteDataFlow",
-				"state": "Inactive",
-				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [
 					{
 						"activity": "silver_ingestion_dataflow",
