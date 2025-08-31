@@ -144,6 +144,8 @@
 					{
 						"name": "bronze_ingestion_dataflow",
 						"type": "ExecuteDataFlow",
+						"state": "Inactive",
+						"onInactiveMarkAs": "Succeeded",
 						"dependsOn": [],
 						"policy": {
 							"timeout": "0.12:00:00",
@@ -1087,7 +1089,7 @@
 						"     ignoreSpaces: false,",
 						"     broadcast: 'auto')~> prescriptionjoinedproviders",
 						"prescriptionjoinedproviders, surrogateKeydimdrug join(silverprescriptionsvalidated@drug_id == selectsilverdrugsstandardized@drug_id,",
-						"     joinType:'inner',",
+						"     joinType:'left',",
 						"     matchType:'exact',",
 						"     ignoreSpaces: false,",
 						"     broadcast: 'auto')~> prescriptionjoineddrug",
