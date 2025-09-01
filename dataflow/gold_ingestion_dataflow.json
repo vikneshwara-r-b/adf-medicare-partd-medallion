@@ -169,6 +169,9 @@
 				},
 				{
 					"name": "defaultandactualdimtherapeutics"
+				},
+				{
+					"name": "handlednullvaluesindimkeys"
 				}
 			],
 			"scriptLines": [
@@ -386,7 +389,7 @@
 				"     matchType:'exact',",
 				"     ignoreSpaces: false,",
 				"     broadcast: 'auto')~> silverprescriptionsjoindimtherapeutics",
-				"silverprescriptionsjoindimtherapeutics select(mapColumn(",
+				"handlednullvaluesindimkeys select(mapColumn(",
 				"          provider_key,",
 				"          drug_key,",
 				"          geography_key,",
@@ -452,6 +455,10 @@
 				"          opioid_count = 0,",
 				"          controlled_count = 0) ~> dimtherapeuticareasdefaultrow",
 				"dimterapeuticssurrogateKey, dimtherapeuticareasdefaultrow union(byName: true)~> defaultandactualdimtherapeutics",
+				"silverprescriptionsjoindimtherapeutics derive(provider_key = coalesce(provider_key,-1),",
+				"          drug_key = coalesce(drug_key,-1),",
+				"          geography_key = coalesce(geography_key, -1),",
+				"          therapeutic_area_key = coalesce(therapeutic_area_key, -1)) ~> handlednullvaluesindimkeys",
 				"defaulandactualdimprovider sink(allowSchemaDrift: true,",
 				"     validateSchema: false,",
 				"     format: 'delta',",
