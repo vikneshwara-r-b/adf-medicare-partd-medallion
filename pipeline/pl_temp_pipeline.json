@@ -62,8 +62,6 @@
 			{
 				"name": "gold_ingestion_dataflow",
 				"type": "ExecuteDataFlow",
-				"state": "Inactive",
-				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [
 					{
 						"activity": "silver_ingestion_dataflow",
