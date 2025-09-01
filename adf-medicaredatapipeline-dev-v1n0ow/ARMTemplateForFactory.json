@@ -252,7 +252,7 @@
 									"dimdrugsink": {},
 									"dimtherapeuticssink": {},
 									"dimgeographysink": {},
-									"factprescriptionssink": {}
+									"facthealthcaretransactionsssink": {}
 								}
 							},
 							"staging": {},
@@ -823,7 +823,7 @@
 								"referenceName": "ls_adls_gen2",
 								"type": "LinkedServiceReference"
 							},
-							"name": "factprescriptionssink"
+							"name": "facthealthcaretransactionsssink"
 						}
 					],
 					"transformations": [
@@ -888,7 +888,7 @@
 							"name": "silverprescriptionsjoindimtherapeutics"
 						},
 						{
-							"name": "factprescriptionsselectcols"
+							"name": "facthealthcaretransactionsselectcols"
 						},
 						{
 							"name": "defaulandactualdimprovider"
@@ -1161,7 +1161,7 @@
 						"          last_updated",
 						"     ),",
 						"     skipDuplicateMapInputs: true,",
-						"     skipDuplicateMapOutputs: true) ~> factprescriptionsselectcols",
+						"     skipDuplicateMapOutputs: true) ~> facthealthcaretransactionsselectcols",
 						"dimprovidersurrogateKey, dimproviderderivedcolumns union(byName: true)~> defaulandactualdimprovider",
 						"dimprovidersurrogateKey filter(provider_key==1) ~> dimproviderdefaultrowfilter",
 						"dimproviderdefaultrowfilter derive(provider_key = -1,",
@@ -1305,11 +1305,11 @@
 						"     postCommands: [],",
 						"     skipDuplicateMapInputs: true,",
 						"     skipDuplicateMapOutputs: true) ~> dimgeographysink",
-						"factprescriptionsselectcols sink(allowSchemaDrift: true,",
+						"facthealthcaretransactionsselectcols sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     format: 'delta',",
 						"     fileSystem: 'gold',",
-						"     folderPath: 'fact_prescriptions',",
+						"     folderPath: 'fact_healthcare_transactions',",
 						"     overwrite: true,",
 						"     mergeSchema: false,",
 						"     autoCompact: false,",
@@ -1323,7 +1323,7 @@
 						"     preCommands: [],",
 						"     postCommands: [],",
 						"     skipDuplicateMapInputs: true,",
-						"     skipDuplicateMapOutputs: true) ~> factprescriptionssink"
+						"     skipDuplicateMapOutputs: true) ~> facthealthcaretransactionsssink"
 					]
 				}
 			},
