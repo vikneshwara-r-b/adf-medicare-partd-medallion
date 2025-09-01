@@ -925,6 +925,9 @@
 						},
 						{
 							"name": "defaultandactualdimtherapeutics"
+						},
+						{
+							"name": "handlednullvaluesindimkeys"
 						}
 					],
 					"scriptLines": [
@@ -1142,7 +1145,7 @@
 						"     matchType:'exact',",
 						"     ignoreSpaces: false,",
 						"     broadcast: 'auto')~> silverprescriptionsjoindimtherapeutics",
-						"silverprescriptionsjoindimtherapeutics select(mapColumn(",
+						"handlednullvaluesindimkeys select(mapColumn(",
 						"          provider_key,",
 						"          drug_key,",
 						"          geography_key,",
@@ -1208,6 +1211,10 @@
 						"          opioid_count = 0,",
 						"          controlled_count = 0) ~> dimtherapeuticareasdefaultrow",
 						"dimterapeuticssurrogateKey, dimtherapeuticareasdefaultrow union(byName: true)~> defaultandactualdimtherapeutics",
+						"silverprescriptionsjoindimtherapeutics derive(provider_key = coalesce(provider_key,-1),",
+						"          drug_key = coalesce(drug_key,-1),",
+						"          geography_key = coalesce(geography_key, -1),",
+						"          therapeutic_area_key = coalesce(therapeutic_area_key, -1)) ~> handlednullvaluesindimkeys",
 						"defaulandactualdimprovider sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     format: 'delta',",
@@ -1651,7 +1658,6 @@
 						"),",
 						"          city_standardized = upper(trim(regexReplace(prscrbr_city, \"[^A-Za-z\\\\s]\", \"\"))),",
 						"          provider_entity_type = iif(or(isNull(prscrbr_first_name),prscrbr_first_name==''),'Organization','Individual'),",
-						"          is_high_volume_provider = iif(tot_clms > 10000, true(), false()),",
 						"          state_name = case(",
 						"    state_code == 'AL', 'Alabama',",
 						"    state_code == 'AK', 'Alaska',",
@@ -2054,9 +2060,8 @@
 						"          city_standardized,",
 						"          state_code,",
 						"          state_name,",
-						"          provider_entity_type,",
-						"          is_high_volume_provider),",
-						"     record_count = count(provider_id)) ~> aggregatestreamderivedcolumns",
+						"          provider_entity_type),",
+						"     is_high_volume_provider = iif(sum(tot_clms) > 10000, true(), false())) ~> aggregatestreamderivedcolumns",
 						"aggregatestreamderivedcolumns derive(effective_date = currentTimestamp(),",
 						"          end_date = toTimestamp(null()),",
 						"          is_current = true(),",
