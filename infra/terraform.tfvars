@@ -19,5 +19,6 @@ gold_zone_directory_structure = [
   "dim_drugs",
   "dim_geography",
   "dim_therapeutic_areas",
-  "fact_prescriptions"
+  "fact_prescriptions",
+  "fact_healthcare_transactions"
 ]

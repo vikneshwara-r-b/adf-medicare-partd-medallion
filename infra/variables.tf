@@ -89,3 +89,39 @@ variable "gold_zone_directory_structure" {
     "gold_therapeutic_area_trends"
   ]
 }
+
+variable "synapse_admin_username" {
+  description = "Synapse SQL Administrator username"
+  type        = string
+  default     = "sqladmin"
+}
+
+variable "synapse_admin_password" {
+  description = "Synapse SQL Administrator password (min 8 chars, complex)"
+  type        = string
+  sensitive   = true
+  default     = ""
+  
+  validation {
+    condition     = length(var.synapse_admin_password) >= 8 || var.synapse_admin_password == ""
+    error_message = "Synapse admin password must be at least 8 characters long or empty for auto-generation."
+  }
+}
+
+variable "enable_synapse_workspace" {
+  description = "Enable Azure Synapse Workspace creation"
+  type        = bool
+  default     = true
+}
+
+variable "enable_synapse_spark_pool" {
+  description = "Enable Synapse Spark Pool creation"
+  type        = bool
+  default     = true
+}
+
+variable "enable_synapse_sql_pool" {
+  description = "Enable Synapse Dedicated SQL Pool creation"
+  type        = bool
+  default     = false
+}
