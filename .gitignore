@@ -1,0 +1,4 @@
+infra/.terraform*
+infra/output.plan
+infra/output.ansi
+infra/terraform.tfstate*
