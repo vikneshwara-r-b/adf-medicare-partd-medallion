@@ -553,7 +553,7 @@
 				"     validateSchema: false,",
 				"     format: 'delta',",
 				"     fileSystem: 'gold',",
-				"     folderPath: 'fact_prescriptions',",
+				"     folderPath: 'fact_healthcare_transactions',",
 				"     overwrite: true,",
 				"     mergeSchema: false,",
 				"     autoCompact: false,",
