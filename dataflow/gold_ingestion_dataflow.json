@@ -491,7 +491,7 @@
 				"     validateSchema: false,",
 				"     format: 'delta',",
 				"     fileSystem: 'gold',",
-				"     folderPath: 'fact_healthcare_transactions',",
+				"     folderPath: 'fact_prescriptions',",
 				"     overwrite: true,",
 				"     mergeSchema: false,",
 				"     autoCompact: false,",

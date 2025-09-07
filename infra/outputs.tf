@@ -78,12 +78,3 @@ output "delta_lake_connection_info" {
     }
   } : null
 }
-
-# output "synapse_query_examples" {
-#   description = "Example queries and code for accessing Delta Lake tables from Synapse"
-#   value = var.enable_synapse_workspace ? {
-#     spark_configuration = "spark.conf.set(\"fs.azure.account.auth.type.${azurerm_storage_account.adls_gen2.name}.dfs.core.windows.net\", \"OAuth\")"
-#     read_delta_table = "df = spark.read.format('delta').load('abfss://silver@${azurerm_storage_account.adls_gen2.name}.dfs.core.windows.net/delta/your_table/')"
-#     serverless_sql_query = "SELECT * FROM OPENROWSET(BULK 'https://${azurerm_storage_account.adls_gen2.name}.dfs.core.windows.net/silver/delta/your_table/', FORMAT = 'DELTA') AS [result]"
-#   } : null
-# }

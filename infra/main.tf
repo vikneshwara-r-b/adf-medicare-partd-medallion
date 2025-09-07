@@ -317,20 +317,20 @@ EOF
 }
 
 # Grant Synapse Workspace access to ADLS Gen2 Storage Account
-# resource "azurerm_role_assignment" "synapse_storage_blob_data_contributor" {
-#   count                = var.enable_synapse_workspace ? 1 : 0
-#   scope                = azurerm_storage_account.adls_gen2.id
-#   role_definition_name = "Storage Blob Data Contributor"
-#   principal_id         = azurerm_synapse_workspace.main[0].identity[0].principal_id
-# }
+resource "azurerm_role_assignment" "synapse_storage_blob_data_contributor" {
+  count                = var.enable_synapse_workspace ? 1 : 0
+  scope                = azurerm_storage_account.adls_gen2.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_synapse_workspace.main[0].identity[0].principal_id
+}
 
 # Additional role for Delta Lake operations (needed for ACID operations)
-# resource "azurerm_role_assignment" "synapse_storage_blob_data_owner" {
-#   count                = var.enable_synapse_workspace ? 1 : 0
-#   scope                = azurerm_storage_account.adls_gen2.id
-#   role_definition_name = "Storage Blob Data Owner"
-#   principal_id         = azurerm_synapse_workspace.main[0].identity[0].principal_id
-# }
+resource "azurerm_role_assignment" "synapse_storage_blob_data_owner" {
+  count                = var.enable_synapse_workspace ? 1 : 0
+  scope                = azurerm_storage_account.adls_gen2.id
+  role_definition_name = "Storage Blob Data Owner"
+  principal_id         = azurerm_synapse_workspace.main[0].identity[0].principal_id
+}
 
 # Grant Synapse access to Key Vault
 resource "azurerm_key_vault_access_policy" "synapse_policy" {
@@ -346,17 +346,17 @@ resource "azurerm_key_vault_access_policy" "synapse_policy" {
 }
 
 # # Grant current user access to Synapse workspace (ADD DEPENDENCY)
-# resource "azurerm_synapse_role_assignment" "current_user_workspace_admin" {
-#   count                = var.enable_synapse_workspace ? 1 : 0
-#   synapse_workspace_id = azurerm_synapse_workspace.main[0].id
-#   role_name           = "Synapse Administrator"
-#   principal_id        = data.azurerm_client_config.current.object_id
+resource "azurerm_synapse_role_assignment" "current_user_workspace_admin" {
+  count                = var.enable_synapse_workspace ? 1 : 0
+  synapse_workspace_id = azurerm_synapse_workspace.main[0].id
+  role_name           = "Synapse Administrator"
+  principal_id        = data.azurerm_client_config.current.object_id
   
-#   # Add dependency to ensure firewall rules are created first
-#   depends_on = [
-#     azurerm_synapse_firewall_rule.allow_azure_services
-#   ]
-# }
+  # Add dependency to ensure firewall rules are created first
+  depends_on = [
+    azurerm_synapse_firewall_rule.allow_azure_services
+  ]
+}
 
 # Firewall rule to allow Azure services
 resource "azurerm_synapse_firewall_rule" "allow_azure_services" {
