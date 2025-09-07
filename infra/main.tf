@@ -345,18 +345,18 @@ resource "azurerm_key_vault_access_policy" "synapse_policy" {
   ]
 }
 
-# # Grant current user access to Synapse workspace (ADD DEPENDENCY)
-resource "azurerm_synapse_role_assignment" "current_user_workspace_admin" {
-  count                = var.enable_synapse_workspace ? 1 : 0
-  synapse_workspace_id = azurerm_synapse_workspace.main[0].id
-  role_name           = "Synapse Administrator"
-  principal_id        = data.azurerm_client_config.current.object_id
+# Grant current user access to Synapse workspace (ADD DEPENDENCY)
+# resource "azurerm_synapse_role_assignment" "current_user_workspace_admin" {
+#   count                = var.enable_synapse_workspace ? 1 : 0
+#   synapse_workspace_id = azurerm_synapse_workspace.main[0].id
+#   role_name           = "Synapse Administrator"
+#   principal_id        = data.azurerm_client_config.current.object_id
   
-  # Add dependency to ensure firewall rules are created first
-  depends_on = [
-    azurerm_synapse_firewall_rule.allow_azure_services
-  ]
-}
+#   # Add dependency to ensure firewall rules are created first
+#   depends_on = [
+#     azurerm_synapse_firewall_rule.allow_azure_services
+#   ]
+# }
 
 # Firewall rule to allow Azure services
 resource "azurerm_synapse_firewall_rule" "allow_azure_services" {
