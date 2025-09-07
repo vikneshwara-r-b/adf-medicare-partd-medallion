@@ -1,0 +1,9 @@
+{
+	"name": "adf-medicaredatapipeline-dev-ei4q7f",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "61fb8658-a2d2-484a-b45e-e8e3114c9dcc",
+		"tenantId": "2a731c61-a2b2-4661-8409-5b861cf40d0c"
+	}
+}
