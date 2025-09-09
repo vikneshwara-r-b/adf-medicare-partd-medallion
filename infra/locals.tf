@@ -8,7 +8,7 @@ locals {
   
   storage_account_name = "${local.project_short}${var.environment}sa"
   data_factory_name    = "adf-${var.project_name}-${var.environment}-${local.resource_suffix}"
-  key_vault_name       = "kv-${local.project_short}-${var.environment}-${local.resource_suffix}"
+  key_vault_name       = "kv-${local.project_short}-${var.environment}"
   resource_group_name  = "rg-${var.project_name}-${var.environment}"
   
   common_tags = {
