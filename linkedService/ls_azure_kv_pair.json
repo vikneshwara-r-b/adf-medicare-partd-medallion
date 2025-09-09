@@ -1,5 +1,6 @@
 {
 	"name": "ls_azure_kv_pair",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
 	"properties": {
 		"annotations": [],
 		"type": "AzureKeyVault",
