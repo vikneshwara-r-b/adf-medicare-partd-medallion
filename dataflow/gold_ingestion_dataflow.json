@@ -341,7 +341,7 @@
 				"silverprescriptionsvalidated derive(data_quality_flag = case(is_suppressed, 'SUPPRESSED', isNull(total_claims),'MISSING','CLEAN'),",
 				"          last_updated = currentTimestamp()) ~> silverprescriptionsvalidatedderivedColumn",
 				"silverprescriptionsvalidatedderivedColumn filter(and(is_suppressed==false(), not(isNull(total_claims)))) ~> filtersilverprescriptionsvalidatedrows",
-				"prescriptionjoineddrug, dimgeographyderivedcols join(silverprescriptionsvalidated@state_code == geographysilverselectcols@state_code,",
+				"prescriptionjoineddrug, dimgeographyderivedcols join(case(geography_level == 'National','US',silverprescriptionsvalidated@state_code) == geographysilverselectcols@state_code,",
 				"     joinType:'left',",
 				"     matchType:'exact',",
 				"     ignoreSpaces: false,",
